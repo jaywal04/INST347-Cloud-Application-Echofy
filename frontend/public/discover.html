@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Discover — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <nav>
+    <a class="logo" href="index.html">Echo<span>fy</span></a>
+    <ul class="nav-links">
+      <li><a href="discover.html" class="is-active">Discover</a></li>
+      <li><a href="index.html#">Friends</a></li>
+      <li><a href="index.html#">Your Echo</a></li>
+      <li><a href="index.html#" class="nav-cta">Sign In</a></li>
+    </ul>
+  </nav>
+
+  <main class="discover-page">
+    <header class="discover-header">
+      <p class="hero-eyebrow discover-eyebrow">Discovery</p>
+      <h1 class="discover-title">Find your next obsession</h1>
+      <p class="discover-lead">Browse what’s charting on Spotify and bring it back here to rate and review.</p>
+    </header>
+
+    <section class="discover-panel">
+      <div class="discover-panel-head">
+        <h2 class="section-title discover-panel-title">Spotify charts</h2>
+        <p class="discover-panel-desc">Pull live tracks from Spotify. Your token stays on the server — never in the browser.</p>
+      </div>
+      <button type="button" class="btn-primary btn-spotify" id="btn-spotify-top" aria-expanded="false">
+        Show top Spotify music
+      </button>
+      <p class="discover-hint" id="spotify-status" role="status"></p>
+      <div class="spotify-results" id="spotify-results" hidden></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="index.html">Home</a>
+      <a href="index.html#">Privacy</a>
+      <a href="index.html#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/discover.js" defer></script>
+</body>
+</html>

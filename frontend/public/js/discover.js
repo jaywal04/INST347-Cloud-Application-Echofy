@@ -8,8 +8,34 @@
   var btn = document.getElementById('btn-spotify-top');
   var statusEl = document.getElementById('spotify-status');
   var resultsEl = document.getElementById('spotify-results');
+  var connectLink = document.getElementById('spotify-connect-link');
+  var connectedBadge = document.getElementById('spotify-connected-badge');
+
+  var fetchOpts = { credentials: 'include' };
 
   if (!btn || !statusEl || !resultsEl) return;
+
+  if (connectLink && API_BASE) {
+    connectLink.href = API_BASE + '/auth/spotify';
+  }
+
+  if (API_BASE && connectedBadge) {
+    fetch(API_BASE + '/api/spotify/session', fetchOpts)
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (data.connected) {
+          connectedBadge.hidden = false;
+        }
+      })
+      .catch(function () {});
+  }
+
+  if (window.location.search.indexOf('spotify=connected') !== -1 && statusEl) {
+    statusEl.textContent =
+      'Spotify connected. Use “Show top Spotify music” for your top tracks (or the chart if none).';
+  }
 
   function setLoading(loading) {
     btn.disabled = loading;
@@ -17,9 +43,14 @@
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
   }
 
-  function sourceLabel(source) {
+  function sourceLabel(source, data) {
     if (source === 'your_top_tracks') return 'Your top tracks (Spotify)';
     if (source === 'global_top_50') return 'Global Top 50 (Spotify)';
+    if (source === 'new_releases') return 'New releases (Spotify)';
+    if (source === 'featured_playlist' && data && data.playlist_name) {
+      return 'Featured: ' + data.playlist_name + ' (Spotify)';
+    }
+    if (source === 'featured_playlist') return 'Featured playlist (Spotify)';
     return 'Spotify';
   }
 
@@ -34,7 +65,7 @@
     resultsEl.hidden = true;
     resultsEl.innerHTML = '';
 
-    fetch(API_BASE + '/api/spotify/top-tracks')
+    fetch(API_BASE + '/api/spotify/top-tracks', fetchOpts)
       .then(function (res) {
         return res.json().then(function (data) {
           return { ok: res.ok, status: res.status, data: data };
@@ -44,9 +75,22 @@
         var ok = _ref.ok;
         var data = _ref.data;
 
+        console.log('[Echofy] Spotify /api/spotify/top-tracks', {
+          httpStatus: _ref.status,
+          ok: ok,
+          payload: data,
+          trackCount: data && data.tracks ? data.tracks.length : 0,
+        });
+
         if (!ok) {
+          var parts = [];
+          if (data.message) parts.push(data.message);
+          if (data.detail) {
+            parts.push(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+          }
           statusEl.textContent =
-            data.message || data.detail || 'Could not load Spotify data. Check JAY_SPOTIFY_TOKEN and that the backend is running.';
+            parts.join(' — ') ||
+            'Could not load Spotify data. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env and restart the backend.';
           return;
         }
 
@@ -59,7 +103,7 @@
         statusEl.textContent = '';
         var badge = document.createElement('p');
         badge.className = 'spotify-source-badge';
-        badge.textContent = sourceLabel(data.source);
+        badge.textContent = sourceLabel(data.source, data);
 
         var list = document.createElement('ul');
         list.className = 'spotify-track-list';
@@ -118,7 +162,8 @@
         resultsEl.hidden = false;
         btn.setAttribute('aria-expanded', 'true');
       })
-      .catch(function () {
+      .catch(function (err) {
+        console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
         statusEl.textContent = 'Network error. Is the backend running on http://127.0.0.1:5000 ?';
       })
       .finally(function () {

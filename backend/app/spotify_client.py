@@ -1,19 +1,31 @@
-"""Spotify Web API helpers (token must stay on the server)."""
+"""Spotify Web API helpers (credentials must stay on the server)."""
 
 from __future__ import annotations
 
-import os
+import threading
+import time
 from typing import Any
 
 import requests
 
+from app.envutil import first_non_empty
+
 SPOTIFY_API = "https://api.spotify.com/v1"
-# Official Spotify chart playlist (Top 50 — Global); public, works with many token types.
+SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
+# Official Spotify chart playlist (Top 50 — Global); public, works with client credentials.
 GLOBAL_TOP_50_PLAYLIST = "37i9dQZEVXbMDoHDwVN2tF"
 
+_REFRESH_MARGIN_SEC = 60
+_REQUEST_TIMEOUT = 20
 
-def _headers(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token.strip()}"}
+_cc_lock = threading.Lock()
+_cc_access_token: str | None = None
+_cc_expires_at_monotonic: float = 0.0
+_cc_client_key: tuple[str, str] | None = None
+
+
+def _headers(access_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {access_token.strip()}"}
 
 
 def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -32,66 +44,251 @@ def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def fetch_top_tracks_for_response(token: str) -> tuple[dict[str, Any], int]:
-    """
-    Try the user's top tracks first; if that fails (e.g. client-credentials token),
-    fall back to the global Top 50 playlist.
-    Returns (json_dict, http_status).
-    """
-    if not token or not token.strip():
-        return (
-            {
-                "error": "missing_token",
-                "message": "Set JAY_SPOTIFY_TOKEN in your .env file (repo root).",
-            },
-            503,
-        )
+def _normalize_new_release_album(album: dict[str, Any]) -> dict[str, Any] | None:
+    if not album:
+        return None
+    images = album.get("images") or []
+    image_url = next((img.get("url") for img in images if img.get("url")), None)
+    artists = [a.get("name", "") for a in album.get("artists") or [] if a.get("name")]
+    return {
+        "name": album.get("name") or "Album",
+        "artists": artists,
+        "album": "New release",
+        "image": image_url,
+        "url": (album.get("external_urls") or {}).get("spotify"),
+    }
 
-    headers = _headers(token)
-    timeout = 20
 
-    me = requests.get(
-        f"{SPOTIFY_API}/me/top/tracks",
-        headers=headers,
-        params={"limit": 20, "time_range": "short_term"},
-        timeout=timeout,
-    )
-    if me.status_code == 200:
-        tracks = []
-        for item in me.json().get("items") or []:
-            t = _normalize_track(item)
-            if t:
-                tracks.append(t)
-        if tracks:
-            return ({"source": "your_top_tracks", "tracks": tracks}, 200)
-        # Empty listening history — fall back to chart playlist
-
+def _playlist_tracks_payload(
+    access_token: str, playlist_id: str, *, market: str | None
+) -> tuple[list[dict[str, Any]] | None, str]:
+    """Returns (tracks_list, error_detail). tracks_list None if request failed or empty."""
+    params: dict[str, Any] = {"limit": 30}
+    if market:
+        params["market"] = market
     pl = requests.get(
-        f"{SPOTIFY_API}/playlists/{GLOBAL_TOP_50_PLAYLIST}/tracks",
-        headers=headers,
-        params={"limit": 30},
-        timeout=timeout,
+        f"{SPOTIFY_API}/playlists/{playlist_id}/tracks",
+        headers=_headers(access_token),
+        params=params,
+        timeout=_REQUEST_TIMEOUT,
     )
     if pl.status_code != 200:
-        detail = ""
         try:
-            detail = pl.json().get("error", {}).get("message", "") or pl.text[:300]
+            detail = pl.json().get("error", {}).get("message", "") or pl.text[:200]
         except Exception:
-            detail = pl.text[:300]
-        return (
-            {
-                "error": "spotify_api_error",
-                "status": pl.status_code,
-                "message": "Spotify rejected the request. Token may be expired or lack required scopes.",
-                "detail": detail,
-            },
-            502,
-        )
+            detail = pl.text[:200]
+        return None, detail or f"HTTP {pl.status_code}"
 
     tracks = []
     for row in pl.json().get("items") or []:
         t = _normalize_track(row.get("track") or {})
         if t:
             tracks.append(t)
+    return (tracks if tracks else None), ""
 
-    return ({"source": "global_top_50", "tracks": tracks}, 200)
+
+def _get_client_credentials_token(client_id: str, client_secret: str) -> tuple[str | None, str]:
+    """
+    Return (access_token, error_message). error_message is empty on success.
+    Uses an in-memory cache until shortly before Spotify's expires_in.
+    """
+    global _cc_access_token, _cc_expires_at_monotonic, _cc_client_key
+
+    cid, csec = client_id.strip(), client_secret.strip()
+    now = time.monotonic()
+    key = (cid, csec)
+
+    with _cc_lock:
+        if (
+            _cc_access_token
+            and now < _cc_expires_at_monotonic
+            and _cc_client_key == key
+        ):
+            return _cc_access_token, ""
+
+        r = requests.post(
+            SPOTIFY_TOKEN_URL,
+            data={"grant_type": "client_credentials"},
+            auth=(cid, csec),
+            timeout=_REQUEST_TIMEOUT,
+        )
+
+        if r.status_code != 200:
+            try:
+                err = r.json().get("error_description") or r.json().get("error", "")
+            except Exception:
+                err = ""
+            detail = err or r.text[:300]
+            return None, f"Spotify token request failed ({r.status_code}): {detail}"
+
+        data = r.json()
+        token = data.get("access_token")
+        if not token:
+            return None, "Spotify token response missing access_token"
+
+        expires_in = int(data.get("expires_in", 3600))
+        _cc_access_token = token
+        _cc_expires_at_monotonic = now + max(30, expires_in - _REFRESH_MARGIN_SEC)
+        _cc_client_key = key
+
+        return token, ""
+
+
+def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
+    """
+    Chart-style content for Client Credentials (and user-token fallback).
+    Global Top 50 often returns 403 for app-only tokens; we fall back to new releases
+    and featured playlists (all allowed for client credentials).
+    """
+    last_detail = ""
+
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
+
+    market_attempts: list[str | None] = []
+    if market:
+        market_attempts.append(market)
+    market_attempts.append(None)
+
+    for m in market_attempts:
+        tracks, err = _playlist_tracks_payload(
+            access_token, GLOBAL_TOP_50_PLAYLIST, market=m
+        )
+        if tracks:
+            return ({"source": "global_top_50", "tracks": tracks}, 200)
+        if err:
+            last_detail = err
+
+    nr = requests.get(
+        f"{SPOTIFY_API}/browse/new-releases",
+        headers=_headers(access_token),
+        params={"limit": 20},
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if nr.status_code == 200:
+        tracks = []
+        for album in nr.json().get("albums", {}).get("items") or []:
+            row = _normalize_new_release_album(album)
+            if row:
+                tracks.append(row)
+        if tracks:
+            return ({"source": "new_releases", "tracks": tracks}, 200)
+    else:
+        try:
+            last_detail = nr.json().get("error", {}).get("message", "") or nr.text[:200]
+        except Exception:
+            last_detail = nr.text[:200]
+
+    feat = requests.get(
+        f"{SPOTIFY_API}/browse/featured-playlists",
+        headers=_headers(access_token),
+        params={"limit": 15},
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if feat.status_code == 200:
+        for p in feat.json().get("playlists", {}).get("items") or []:
+            pid = p.get("id")
+            pname = p.get("name") or "Featured"
+            if not pid:
+                continue
+            tracks, err = _playlist_tracks_payload(access_token, pid, market=None)
+            if tracks:
+                return (
+                    {
+                        "source": "featured_playlist",
+                        "tracks": tracks,
+                        "playlist_name": pname,
+                    },
+                    200,
+                )
+            if err:
+                last_detail = err
+    else:
+        try:
+            last_detail = feat.json().get("error", {}).get("message", "") or feat.text[:200]
+        except Exception:
+            last_detail = feat.text[:200]
+
+    msg = "Could not load music from Spotify."
+    if last_detail:
+        msg = f"{msg} Last error: {last_detail}"
+    return (
+        {
+            "error": "spotify_api_error",
+            "message": msg,
+            "detail": last_detail,
+        },
+        502,
+    )
+
+
+def _legacy_user_then_playlist(user_token: str) -> tuple[dict[str, Any], int]:
+    """Try /me/top/tracks, then Global Top 50 using the same user token (only if /me succeeds)."""
+    headers = _headers(user_token)
+
+    me = requests.get(
+        f"{SPOTIFY_API}/me/top/tracks",
+        headers=headers,
+        params={"limit": 20, "time_range": "short_term"},
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if me.status_code not in (200,):
+        # Do not call the Web API with an invalid/expired user token (would yield 502).
+        return (
+            {
+                "error": "invalid_user_token",
+                "message": "Spotify user token is missing, expired, or lacks user-top-read. Use Connect Spotify or set Client ID + Secret for the chart.",
+                "status": me.status_code,
+            },
+            401,
+        )
+
+    tracks = []
+    for item in me.json().get("items") or []:
+        t = _normalize_track(item)
+        if t:
+            tracks.append(t)
+    if tracks:
+        return ({"source": "your_top_tracks", "tracks": tracks}, 200)
+
+    return fetch_public_chart(user_token.strip())
+
+
+def fetch_top_tracks_for_response(
+    client_id: str = "",
+    client_secret: str = "",
+    legacy_user_token: str = "",
+    oauth_access_token: str = "",
+) -> tuple[dict[str, Any], int]:
+    """
+    When Client ID + Secret are set: load Global Top 50 via Client Credentials (dashboard chart).
+    Otherwise: OAuth / legacy user token for personalized top tracks + playlist fallback.
+    """
+    user = (oauth_access_token or legacy_user_token or "").strip()
+    cid, csec = client_id.strip(), client_secret.strip()
+
+    if cid and csec:
+        token, err = _get_client_credentials_token(cid, csec)
+        if not token:
+            return (
+                {
+                    "error": "token_error",
+                    "message": err or "Could not obtain Spotify access token.",
+                },
+                502,
+            )
+        return fetch_public_chart(token)
+
+    if user:
+        return _legacy_user_then_playlist(user)
+
+    return (
+        {
+            "error": "missing_credentials",
+            "message": (
+                "Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env "
+                "(repo root) for the chart, or connect Spotify / set SPOTIFY_TOKEN. "
+                "Legacy JAY_SPOTIFY_* names still work if SPOTIFY_* are empty."
+            ),
+        },
+        503,
+    )

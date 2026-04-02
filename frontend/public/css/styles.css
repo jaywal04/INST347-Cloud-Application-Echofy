@@ -616,6 +616,26 @@ footer a:hover { color: var(--accent); }
   margin: 0;
 }
 
+.discover-oauth-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.discover-connect-link {
+  display: inline-block;
+  text-align: center;
+}
+
+.discover-connected {
+  font-size: 0.78rem;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .btn-spotify {
   margin-top: 0.25rem;
 }

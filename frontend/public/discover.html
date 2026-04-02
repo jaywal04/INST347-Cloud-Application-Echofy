@@ -29,8 +29,12 @@
     <section class="discover-panel">
       <div class="discover-panel-head">
         <h2 class="section-title discover-panel-title">Spotify charts</h2>
-        <p class="discover-panel-desc">Pull live tracks from Spotify. Your token stays on the server — never in the browser.</p>
+        <p class="discover-panel-desc">Load Spotify’s Global Top 50 chart, or connect your account to see your top tracks. Client ID, secret, and tokens stay on the server.</p>
       </div>
+      <p class="discover-oauth-row">
+        <a class="btn-ghost discover-connect-link" id="spotify-connect-link" href="#">Connect Spotify account</a>
+        <span class="discover-connected" id="spotify-connected-badge" hidden>Spotify connected</span>
+      </p>
       <button type="button" class="btn-primary btn-spotify" id="btn-spotify-top" aria-expanded="false">
         Show top Spotify music
       </button>

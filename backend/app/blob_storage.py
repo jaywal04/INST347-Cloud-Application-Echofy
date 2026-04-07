@@ -6,7 +6,7 @@ import os
 import uuid
 from urllib.parse import urlparse
 
-from azure.core.exceptions import ResourceExistsError
+from azure.core.exceptions import HttpResponseError, ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient, ContentSettings, PublicAccess
 
 CONN_ENV = "AZURE_STORAGE_CONNECTION_STRING"
@@ -21,7 +21,7 @@ _MAX_BYTES = 5 * 1024 * 1024
 
 
 def profiles_container_name() -> str:
-    name = os.environ.get(CONTAINER_ENV, "echofy-profiles").strip()
+    name = os.environ.get(CONTAINER_ENV, "echofy-profiles").strip().lower()
     return name or "echofy-profiles"
 
 
@@ -32,12 +32,57 @@ def get_blob_service() -> BlobServiceClient | None:
     return BlobServiceClient.from_connection_string(conn)
 
 
-def ensure_profiles_container(service: BlobServiceClient) -> None:
+def ensure_profiles_container(service: BlobServiceClient) -> tuple[bool, str]:
+    """
+    Ensure the profile container exists. Tries blob-level public read first (for <img src>),
+    then a private container if the storage account disallows public access.
+
+    Returns (ok, error_message). error_message is empty when ok.
+    """
     name = profiles_container_name()
+    cc = service.get_container_client(name)
+
+    if cc.exists():
+        return True, ""
+
+    def _try_create(*, public_blob: bool) -> None:
+        if public_blob:
+            cc.create_container(public_access=PublicAccess.Blob)
+        else:
+            cc.create_container()
+
     try:
-        service.create_container(name, public_access=PublicAccess.Blob)
+        _try_create(public_blob=True)
     except ResourceExistsError:
         pass
+    except HttpResponseError:
+        try:
+            _try_create(public_blob=False)
+        except ResourceExistsError:
+            pass
+        except HttpResponseError:
+            pass
+    except Exception:
+        try:
+            _try_create(public_blob=False)
+        except ResourceExistsError:
+            pass
+        except HttpResponseError:
+            pass
+
+    if not cc.exists():
+        return (
+            False,
+            (
+                f"Blob container {name!r} does not exist and could not be created. "
+                "In Azure Portal, open the storage account → Containers → add container "
+                f"{name!r}, or allow this app to create containers (account key connection string). "
+                "If blob public access is disabled on the account, create the container manually; "
+                "you may need to enable public blob access for anonymous image URLs."
+            ),
+        )
+
+    return True, ""
 
 
 def upload_profile_image(user_id: int, file_storage) -> tuple[str | None, str]:
@@ -58,15 +103,26 @@ def upload_profile_image(user_id: int, file_storage) -> tuple[str | None, str]:
     if len(raw) > _MAX_BYTES:
         return None, "Image must be 5 MB or smaller."
 
-    ensure_profiles_container(service)
+    ok, ensure_err = ensure_profiles_container(service)
+    if not ok:
+        return None, ensure_err
+
     container = service.get_container_client(profiles_container_name())
     blob_name = f"{user_id}/{uuid.uuid4().hex}{ext}"
     blob = container.get_blob_client(blob_name)
-    blob.upload_blob(
-        raw,
-        overwrite=True,
-        content_settings=ContentSettings(content_type=content_type),
-    )
+    try:
+        blob.upload_blob(
+            raw,
+            overwrite=True,
+            content_settings=ContentSettings(content_type=content_type),
+        )
+    except ResourceNotFoundError as e:
+        code = getattr(e, "error_code", None) or "not_found"
+        return None, (
+            f"Blob upload failed ({code}). Create container {profiles_container_name()!r} "
+            "in the Azure Portal (Storage account → Containers) and ensure the connection string "
+            "has write access."
+        )
     return blob.url, ""
 
 
@@ -83,7 +139,7 @@ def delete_blob_by_url(url: str | None) -> None:
         return
     container_name = parts[0]
     blob_name = "/".join(parts[1:])
-    if container_name != profiles_container_name():
+    if container_name.lower() != profiles_container_name().lower():
         return
     try:
         container = service.get_container_client(container_name)

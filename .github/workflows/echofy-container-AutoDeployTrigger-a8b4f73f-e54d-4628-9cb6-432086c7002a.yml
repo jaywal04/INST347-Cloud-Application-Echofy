@@ -1,12 +1,20 @@
 # Deploy API image to Azure Container Apps.
 #
-# GitHub secrets (repo → Settings → Secrets):
-#   ECHOFYCONTAINER_AZURE_CLIENT_ID / TENANT_ID / SUBSCRIPTION_ID — OIDC (existing)
-#   ECHOFYCONTAINER_ACR_NAME — Azure Container Registry short name only (e.g. myregistry), NOT the full URL
+# GitHub secrets — use ONE of these registry options:
 #
-# The service principal for OIDC needs AcrPush (or equivalent) on the ACR and permission to update the Container App.
+# Option A (matches many Azure-generated workflows):
+#   ECHOFYCONTAINER_REGISTRY_URL — login server only, e.g. myregistry.azurecr.io (no https://)
+#   ECHOFYCONTAINER_REGISTRY_USERNAME
+#   ECHOFYCONTAINER_REGISTRY_PASSWORD
 #
-# Container App ingress "Target port" must be 8080 to match the Dockerfile.
+# Option B (OIDC push to ACR, no registry password):
+#   ECHOFYCONTAINER_ACR_NAME — short registry name only (e.g. myregistry)
+#   Service principal needs AcrPush on that ACR.
+#
+# Always required:
+#   ECHOFYCONTAINER_AZURE_CLIENT_ID / TENANT_ID / SUBSCRIPTION_ID
+#
+# Container App ingress target port should be 8080 (see Dockerfile).
 
 name: Trigger auto deployment for echofy-container
 
@@ -42,22 +50,52 @@ jobs:
           tenant-id: ${{ secrets.ECHOFYCONTAINER_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.ECHOFYCONTAINER_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Verify ACR name secret
+      - name: Prepare registry settings
+        id: prep
         env:
           ACR_NAME: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}
+          REGISTRY_URL: ${{ secrets.ECHOFYCONTAINER_REGISTRY_URL }}
         run: |
-          if [ -z "$ACR_NAME" ]; then
-            echo "::error::Set GitHub secret ECHOFYCONTAINER_ACR_NAME to your Azure Container Registry name (short name only, e.g. myregistry)."
+          set -e
+          URL_RAW="${REGISTRY_URL:-}"
+          URL_RAW="${URL_RAW#https://}"
+          URL_RAW="${URL_RAW#http://}"
+          URL_RAW="${URL_RAW%/}"
+          if [ -n "$URL_RAW" ]; then
+            echo "mode=registry" >> "$GITHUB_OUTPUT"
+            echo "registry_url=$URL_RAW" >> "$GITHUB_OUTPUT"
+            echo "image=$URL_RAW/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          elif [ -n "$ACR_NAME" ]; then
+            echo "mode=acr" >> "$GITHUB_OUTPUT"
+            echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
+            echo "image=${ACR_NAME}.azurecr.io/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Set ECHOFYCONTAINER_REGISTRY_URL (e.g. myregistry.azurecr.io) plus USERNAME/PASSWORD, OR set ECHOFYCONTAINER_ACR_NAME for OIDC-only ACR push."
             exit 1
           fi
 
-      - name: Build and push container image to registry
+      - name: Build and deploy (ACR + OIDC)
+        if: steps.prep.outputs.mode == 'acr'
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: Dockerfile
-          acrName: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}
+          acrName: ${{ steps.prep.outputs.acr_name }}
           containerAppName: echofy-container
           resourceGroup: Echofy
-          imageToBuild: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}.azurecr.io/echofy:${{ github.sha }}
+          imageToBuild: ${{ steps.prep.outputs.image }}
+          targetPort: 8080
+
+      - name: Build and deploy (registry login)
+        if: steps.prep.outputs.mode == 'registry'
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: Dockerfile
+          registryUrl: ${{ steps.prep.outputs.registry_url }}
+          registryUsername: ${{ secrets.ECHOFYCONTAINER_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.ECHOFYCONTAINER_REGISTRY_PASSWORD }}
+          containerAppName: echofy-container
+          resourceGroup: Echofy
+          imageToBuild: ${{ steps.prep.outputs.image }}
           targetPort: 8080

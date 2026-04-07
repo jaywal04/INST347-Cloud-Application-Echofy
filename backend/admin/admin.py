@@ -16,10 +16,10 @@ from textwrap import indent
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from flask import Flask
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, or_, text
 
 from app.database import db, _build_database_uri
-from app.models import User
+from app.models import FriendRequest, User
 
 
 def create_admin_app():
@@ -168,6 +168,9 @@ def delete_user():
         print("  Cancelled.")
         return
 
+    FriendRequest.query.filter(
+        or_(FriendRequest.from_user_id == user.id, FriendRequest.to_user_id == user.id)
+    ).delete(synchronize_session=False)
     db.session.delete(user)
     db.session.commit()
     print(f"  User '{user.username}' has been deleted.")

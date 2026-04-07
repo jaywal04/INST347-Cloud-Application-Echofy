@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+**/__pycache__
+*.pyc
+*.pyo
+frontend
+api
+*.db
+*.sqlite3
+.env
+.~*
+**/*.md

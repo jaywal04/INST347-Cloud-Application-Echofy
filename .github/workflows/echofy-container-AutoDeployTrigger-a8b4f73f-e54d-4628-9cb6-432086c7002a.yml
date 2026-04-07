@@ -1,8 +1,16 @@
+# Deploy API image to Azure Container Apps.
+#
+# GitHub secrets (repo → Settings → Secrets):
+#   ECHOFYCONTAINER_AZURE_CLIENT_ID / TENANT_ID / SUBSCRIPTION_ID — OIDC (existing)
+#   ECHOFYCONTAINER_ACR_NAME — Azure Container Registry short name only (e.g. myregistry), NOT the full URL
+#
+# The service principal for OIDC needs AcrPush (or equivalent) on the ACR and permission to update the Container App.
+#
+# Container App ingress "Target port" must be 8080 to match the Dockerfile.
+
 name: Trigger auto deployment for echofy-container
 
-# When this action will be executed
 on:
-  # Automatically trigger it when detected changes in repo
   push:
     branches:
       - main
@@ -10,18 +18,18 @@ on:
       - 'backend/**'
       - 'requirements.txt'
       - 'Dockerfile'
+      - '.dockerignore'
       - 'docker/**'
       - '.github/workflows/echofy-container-AutoDeployTrigger-a8b4f73f-e54d-4628-9cb6-432086c7002a.yml'
 
-  # Allow manual trigger 
-  workflow_dispatch:      
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout to the branch
@@ -34,19 +42,22 @@ jobs:
           tenant-id: ${{ secrets.ECHOFYCONTAINER_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.ECHOFYCONTAINER_AZURE_SUBSCRIPTION_ID }}
 
+      - name: Verify ACR name secret
+        env:
+          ACR_NAME: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}
+        run: |
+          if [ -z "$ACR_NAME" ]; then
+            echo "::error::Set GitHub secret ECHOFYCONTAINER_ACR_NAME to your Azure Container Registry name (short name only, e.g. myregistry)."
+            exit 1
+          fi
+
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
-          registryUrl: 
-          registryUsername: ${{ secrets.ECHOFYCONTAINER_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.ECHOFYCONTAINER_REGISTRY_PASSWORD }}
+          dockerfilePath: Dockerfile
+          acrName: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}
           containerAppName: echofy-container
           resourceGroup: Echofy
-          imageToBuild: default/[parameters('containerAppName')]:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
-
-
+          imageToBuild: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}.azurecr.io/echofy:${{ github.sha }}
+          targetPort: 8080

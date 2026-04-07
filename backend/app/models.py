@@ -19,11 +19,12 @@ class FriendRequest(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
+    # SQL Server rejects two ON DELETE CASCADE FKs from this table to the same parent (error 1785).
     from_user_id = db.Column(
-        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
     )
     to_user_id = db.Column(
-        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
     )
     status = db.Column(db.String(20), nullable=False, default="pending")
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

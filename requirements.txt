@@ -7,3 +7,4 @@ requests>=2.31
 pyodbc>=5.1
 azure-storage-blob>=12.19
 azure-core>=1.29
+gunicorn>=22.0

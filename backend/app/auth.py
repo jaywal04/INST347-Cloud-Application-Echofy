@@ -6,10 +6,11 @@ import re
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import or_
 
 from app.blob_storage import delete_blob_by_url, upload_profile_image
 from app.database import db
-from app.models import User
+from app.models import FriendRequest, User
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -217,6 +218,9 @@ def delete_account():
 
     user = db.session.get(User, current_user.id)
     delete_blob_by_url(user.profile_image_url if user else None)
+    FriendRequest.query.filter(
+        or_(FriendRequest.from_user_id == user.id, FriendRequest.to_user_id == user.id)
+    ).delete(synchronize_session=False)
     logout_user()
     db.session.delete(user)
     db.session.commit()

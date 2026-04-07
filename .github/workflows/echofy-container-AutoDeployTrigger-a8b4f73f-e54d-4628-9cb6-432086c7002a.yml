@@ -1,21 +1,22 @@
 # Deploy API image to Azure Container Apps.
 #
-# GitHub secrets — use ONE of these registry options:
+# Registry auth — provide ONE of the following (first match wins in "Prepare"):
 #
-# Option A (registry login — typical Azure-generated secrets):
-#   ECHOFYCONTAINER_REGISTRY_USERNAME
-#   ECHOFYCONTAINER_REGISTRY_PASSWORD
-#   Optional: ECHOFYCONTAINER_REGISTRY_URL (e.g. myregistry.azurecr.io). If omitted, URL is
-#   assumed to be {USERNAME}.azurecr.io (standard ACR admin username = registry name).
+# 1) OIDC only: secret ECHOFYCONTAINER_ACR_NAME (short name, e.g. myregistry)
 #
-# Option B (OIDC push to ACR, no registry password):
-#   ECHOFYCONTAINER_ACR_NAME — short registry name only (e.g. myregistry)
-#   Service principal needs AcrPush on that ACR.
+# 2) Docker login with secrets (either naming style):
+#    - ECHOFYCONTAINER_REGISTRY_USERNAME + ECHOFYCONTAINER_REGISTRY_PASSWORD
+#    - REGISTRY_USERNAME + REGISTRY_PASSWORD  (common in other templates)
 #
-# Always required:
-#   ECHOFYCONTAINER_AZURE_CLIENT_ID / TENANT_ID / SUBSCRIPTION_ID
+# 3) Login server from any of:
+#    - Secret ECHOFYCONTAINER_REGISTRY_URL (e.g. myregistry.azurecr.io)
+#    - Variable ECHOFYCONTAINER_REGISTRY_URL (repo Settings → Variables → Actions; not secret)
+#    - workflow_dispatch input "registry_login_server" (manual run only)
+#    - If URL still empty but username+password set: {USERNAME}.azurecr.io
 #
-# Container App ingress target port should be 8080 (see Dockerfile).
+# Azure OIDC: ECHOFYCONTAINER_AZURE_CLIENT_ID / TENANT_ID / SUBSCRIPTION_ID
+#
+# Ingress target port on the Container App should be 8080.
 
 name: Trigger auto deployment for echofy-container
 
@@ -32,6 +33,11 @@ on:
       - '.github/workflows/echofy-container-AutoDeployTrigger-a8b4f73f-e54d-4628-9cb6-432086c7002a.yml'
 
   workflow_dispatch:
+    inputs:
+      registry_login_server:
+        description: 'ACR login server if not in secrets/vars (e.g. myregistry.azurecr.io)'
+        required: false
+        type: string
 
 jobs:
   build-and-deploy:
@@ -54,33 +60,61 @@ jobs:
       - name: Prepare registry settings
         id: prep
         env:
+          MANUAL_URL: ${{ github.event.inputs.registry_login_server }}
           ACR_NAME: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}
-          REGISTRY_URL: ${{ secrets.ECHOFYCONTAINER_REGISTRY_URL }}
-          REGISTRY_USER: ${{ secrets.ECHOFYCONTAINER_REGISTRY_USERNAME }}
-          REGISTRY_PASS: ${{ secrets.ECHOFYCONTAINER_REGISTRY_PASSWORD }}
+          REGISTRY_URL_SECRET: ${{ secrets.ECHOFYCONTAINER_REGISTRY_URL }}
+          REGISTRY_URL_VAR: ${{ vars.ECHOFYCONTAINER_REGISTRY_URL }}
+          EU: ${{ secrets.ECHOFYCONTAINER_REGISTRY_USERNAME }}
+          EP: ${{ secrets.ECHOFYCONTAINER_REGISTRY_PASSWORD }}
+          GU: ${{ secrets.REGISTRY_USERNAME }}
+          GP: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
           set -e
-          URL_RAW="${REGISTRY_URL:-}"
-          URL_RAW="${URL_RAW#https://}"
-          URL_RAW="${URL_RAW#http://}"
-          URL_RAW="${URL_RAW%/}"
-          if [ -n "$URL_RAW" ]; then
-            echo "mode=registry" >> "$GITHUB_OUTPUT"
-            echo "registry_url=$URL_RAW" >> "$GITHUB_OUTPUT"
-            echo "image=$URL_RAW/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          elif [ -n "$ACR_NAME" ]; then
+          strip_url() {
+            local u="$1"
+            u="${u#https://}"
+            u="${u#http://}"
+            u="${u%/}"
+            echo "$u"
+          }
+
+          URL_RAW=""
+          [ -n "${MANUAL_URL:-}" ] && URL_RAW="$(strip_url "$MANUAL_URL")"
+          [ -z "$URL_RAW" ] && [ -n "${REGISTRY_URL_SECRET:-}" ] && URL_RAW="$(strip_url "$REGISTRY_URL_SECRET")"
+          [ -z "$URL_RAW" ] && [ -n "${REGISTRY_URL_VAR:-}" ] && URL_RAW="$(strip_url "$REGISTRY_URL_VAR")"
+
+          CRED=""
+          RUSER=""
+          if [ -n "${EU:-}" ] && [ -n "${EP:-}" ]; then
+            CRED="echofy"
+            RUSER="$EU"
+          elif [ -n "${GU:-}" ] && [ -n "${GP:-}" ]; then
+            CRED="generic"
+            RUSER="$GU"
+          fi
+
+          if [ -n "${ACR_NAME:-}" ]; then
             echo "mode=acr" >> "$GITHUB_OUTPUT"
             echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
             echo "image=${ACR_NAME}.azurecr.io/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          elif [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASS" ]; then
-            echo "mode=registry" >> "$GITHUB_OUTPUT"
-            echo "registry_url=${REGISTRY_USER}.azurecr.io" >> "$GITHUB_OUTPUT"
-            echo "image=${REGISTRY_USER}.azurecr.io/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-            echo "::notice::Using registry ${REGISTRY_USER}.azurecr.io from USERNAME (set ECHOFYCONTAINER_REGISTRY_URL if your login server differs)."
-          else
-            echo "::error::Set ECHOFYCONTAINER_REGISTRY_USERNAME and ECHOFYCONTAINER_REGISTRY_PASSWORD (ACR admin: username is usually the registry name), and optionally ECHOFYCONTAINER_REGISTRY_URL. Or set ECHOFYCONTAINER_ACR_NAME for OIDC-only push."
+            echo "credential_source=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "$CRED" ]; then
+            echo "::error::No registry credentials found. Add repository Actions secrets: (ECHOFYCONTAINER_REGISTRY_USERNAME + ECHOFYCONTAINER_REGISTRY_PASSWORD) OR (REGISTRY_USERNAME + REGISTRY_PASSWORD). Optionally set ECHOFYCONTAINER_REGISTRY_URL secret or repo variable. For OIDC-only push, set ECHOFYCONTAINER_ACR_NAME."
             exit 1
           fi
+
+          if [ -z "$URL_RAW" ]; then
+            URL_RAW="${RUSER}.azurecr.io"
+            echo "::notice::Using login server ${URL_RAW} from registry username (override with secret/variable ECHOFYCONTAINER_REGISTRY_URL or manual workflow input)."
+          fi
+
+          echo "mode=registry" >> "$GITHUB_OUTPUT"
+          echo "credential_source=$CRED" >> "$GITHUB_OUTPUT"
+          echo "registry_url=$URL_RAW" >> "$GITHUB_OUTPUT"
+          echo "image=$URL_RAW/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build and deploy (ACR + OIDC)
         if: steps.prep.outputs.mode == 'acr'
@@ -94,8 +128,8 @@ jobs:
           imageToBuild: ${{ steps.prep.outputs.image }}
           targetPort: 8080
 
-      - name: Build and deploy (registry login)
-        if: steps.prep.outputs.mode == 'registry'
+      - name: Build and deploy (registry login, Echofy secret names)
+        if: steps.prep.outputs.mode == 'registry' && steps.prep.outputs.credential_source == 'echofy'
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
@@ -103,6 +137,20 @@ jobs:
           registryUrl: ${{ steps.prep.outputs.registry_url }}
           registryUsername: ${{ secrets.ECHOFYCONTAINER_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.ECHOFYCONTAINER_REGISTRY_PASSWORD }}
+          containerAppName: echofy-container
+          resourceGroup: Echofy
+          imageToBuild: ${{ steps.prep.outputs.image }}
+          targetPort: 8080
+
+      - name: Build and deploy (registry login, REGISTRY_* secrets)
+        if: steps.prep.outputs.mode == 'registry' && steps.prep.outputs.credential_source == 'generic'
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: Dockerfile
+          registryUrl: ${{ steps.prep.outputs.registry_url }}
+          registryUsername: ${{ secrets.REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.REGISTRY_PASSWORD }}
           containerAppName: echofy-container
           resourceGroup: Echofy
           imageToBuild: ${{ steps.prep.outputs.image }}

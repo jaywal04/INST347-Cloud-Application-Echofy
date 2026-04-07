@@ -7,8 +7,12 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request, session
 from flask_cors import CORS
+from flask_login import LoginManager
 
+from app.auth import auth_bp
+from app.database import init_db
 from app.envutil import first_non_empty
+from app.models import User
 from app.spotify_client import SPOTIFY_TOKEN_URL, fetch_top_tracks_for_response
 
 PORT = int(os.environ.get("PORT", "5000"))
@@ -85,6 +89,22 @@ def create_app() -> Flask:
         ],
         supports_credentials=True,
     )
+
+    # --- Database & Auth ---
+    init_db(app)
+
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        return jsonify(ok=False, errors=["Login required."]), 401
+
+    app.register_blueprint(auth_bp)
 
     @app.get("/api/health")
     def health():

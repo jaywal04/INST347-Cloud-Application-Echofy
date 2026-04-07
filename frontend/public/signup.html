@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Up — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="logo" href="index.html">Echo<span>fy</span></a>
+    <ul class="nav-links">
+      <li><a href="discover.html">Discover</a></li>
+      <li><a href="#">Friends</a></li>
+      <li><a href="#">Your Echo</a></li>
+      <li><a href="login.html" class="nav-cta">Sign In</a></li>
+    </ul>
+  </nav>
+
+  <!-- SIGN-UP FORM -->
+  <div class="auth-page">
+    <div class="auth-card">
+      <h1 class="auth-title">Create your account</h1>
+      <p class="auth-subtitle">Join the community. Rate, review, and own your taste.</p>
+
+      <div id="auth-error" class="auth-error" hidden></div>
+
+      <form id="signup-form" novalidate>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+        </div>
+
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" placeholder="3-30 chars, letters, numbers, _" autocomplete="username" required />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="At least 8 characters" autocomplete="new-password" required />
+          <div class="password-strength">
+            <div class="strength-bar">
+              <div class="strength-fill" id="strength-fill"></div>
+            </div>
+            <span class="strength-label" id="strength-label"></span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="confirm-password">Confirm Password</label>
+          <input type="password" id="confirm-password" name="confirmPassword" placeholder="Retype your password" autocomplete="new-password" required />
+          <span class="field-hint" id="confirm-hint"></span>
+        </div>
+
+        <div class="form-group form-check">
+          <label class="check-label">
+            <input type="checkbox" id="accept-terms" name="acceptedTerms" required />
+            <span>I agree to the <a href="#" class="auth-link">Terms of Service</a> and <a href="#" class="auth-link">Privacy Policy</a></span>
+          </label>
+        </div>
+
+        <button type="submit" class="btn-primary auth-submit" id="btn-signup">Create Account</button>
+      </form>
+
+      <p class="auth-switch">Already have an account? <a href="login.html" class="auth-link">Sign in</a></p>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <span>&copy; 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/auth.js" defer></script>
+</body>
+</html>

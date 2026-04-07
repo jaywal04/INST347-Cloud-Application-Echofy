@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from flask_sqlalchemy import SQLAlchemy
 
@@ -27,7 +28,9 @@ def _build_database_uri() -> str:
     if generic:
         return generic
 
-    return "sqlite:///echofy.db"
+    db_path = Path(__file__).resolve().parent.parent / "instance" / "echofy.db"
+    db_path.parent.mkdir(exist_ok=True)
+    return f"sqlite:///{db_path}"
 
 
 def init_db(app):

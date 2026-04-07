@@ -98,7 +98,7 @@ Echofy has a built-in account system. Users can sign up and log in from the navi
 
 ### Database
 
-By default, the backend uses **SQLite** (`backend/instance/echofy.db`) — no setup required, the database file is created automatically on first run.
+By default, the backend uses **SQLite** (`backend/instance/echofy.db`) — no setup required, the database file is created automatically on first run. The path is absolute so the same database is used regardless of which directory you start the server from.
 
 To use **Azure SQL** in production, set `AZURE_SQL_CONNECTION_STRING` in your `.env`:
 

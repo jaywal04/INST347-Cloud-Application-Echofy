@@ -921,3 +921,369 @@ footer a:hover { color: var(--accent); }
   color: var(--text-muted);
   margin-top: 1.5rem;
 }
+
+/* ========== NAV PROFILE ICON ========== */
+.nav-profile-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.nav-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.nav-avatar-img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.15s;
+}
+
+.nav-profile-link:hover .nav-avatar-img {
+  transform: scale(1.08);
+}
+
+.nav-profile-link:hover .nav-avatar {
+  background: var(--accent-soft);
+  transform: scale(1.08);
+}
+
+/* ========== PROFILE PAGE ========== */
+.profile-page {
+  padding: 7rem 3rem 4rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.profile-avatar-large {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.profile-avatar-large .profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.profile-photo-hint {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.profile-photo-hint code {
+  font-size: 0.75rem;
+}
+
+.profile-header-info {
+  min-width: 0;
+}
+
+.profile-username {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.profile-meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Tabs */
+.profile-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--navy-border);
+  margin-bottom: 2rem;
+}
+
+.profile-tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.8rem 1.4rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.profile-tab:hover {
+  color: var(--text-primary);
+}
+
+.profile-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Tab content */
+.profile-tab-content {
+  display: none;
+}
+
+.profile-tab-content.active {
+  display: block;
+}
+
+/* Profile form grid */
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+}
+
+.profile-form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.profile-form-grid select,
+.profile-form-grid textarea {
+  width: 100%;
+  background: var(--navy-mid);
+  border: 1px solid var(--navy-border);
+  border-radius: 4px;
+  padding: 0.75rem 0.9rem;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.92rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.profile-form-grid select:focus,
+.profile-form-grid textarea:focus {
+  border-color: var(--accent);
+}
+
+.profile-form-grid textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.profile-form-grid input:disabled,
+.profile-form-grid select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-save {
+  margin-top: 1.5rem;
+}
+
+/* Message */
+.profile-msg {
+  font-size: 0.84rem;
+  padding: 0.7rem 1rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+}
+
+.msg-success {
+  background: rgba(60, 196, 106, 0.12);
+  border: 1px solid rgba(60, 196, 106, 0.3);
+  color: #3cc46a;
+}
+
+.msg-error {
+  background: rgba(220, 60, 60, 0.12);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  color: #e87c7c;
+}
+
+/* Privacy settings */
+.privacy-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--navy-border);
+  border: 1px solid var(--navy-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.privacy-row {
+  background: var(--navy-card);
+  padding: 1.3rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.privacy-info h3 {
+  font-size: 0.92rem;
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+
+.privacy-info p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--navy-border);
+  border-radius: 24px;
+  transition: background 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background: #fff;
+}
+
+/* Account control / Danger zone */
+.account-section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 1.2rem;
+}
+
+.danger-zone {
+  background: var(--navy-card);
+  border: 1px solid rgba(220, 60, 60, 0.3);
+  border-radius: 4px;
+  padding: 1.3rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.danger-info h3 {
+  font-size: 0.92rem;
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+  color: #e87c7c;
+}
+
+.danger-info p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.btn-danger {
+  background: #dc3c3c;
+  color: #fff;
+  padding: 0.6rem 1.4rem;
+  border: none;
+  border-radius: 3px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: #c52e2e;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.delete-confirm {
+  margin-top: 1.2rem;
+  background: var(--navy-card);
+  border: 1px solid var(--navy-border);
+  border-radius: 4px;
+  padding: 1.5rem;
+}
+
+.delete-warning {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.delete-actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}

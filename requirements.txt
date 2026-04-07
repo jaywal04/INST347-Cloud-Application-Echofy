@@ -5,3 +5,5 @@ flask-sqlalchemy>=3.1
 python-dotenv>=1.0
 requests>=2.31
 pyodbc>=5.1
+azure-storage-blob>=12.19
+azure-core>=1.29

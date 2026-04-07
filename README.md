@@ -27,6 +27,8 @@ The prototype script `echofy_model_prototype.py` lives in `backend/` at the repo
 | `app/auth.py` | Auth API routes — signup, login, logout, session check (`/api/auth/*`) |
 | `app/models.py` | SQLAlchemy User model (hashed passwords, email, username, terms) |
 | `app/database.py` | Database config — SQLite locally, Azure SQL when credentials are provided |
+| `app/schema_sync.py` | On startup, adds missing `users` columns to match the model (Azure SQL / SQLite) |
+| `app/blob_storage.py` | Azure Blob uploads for profile photos when `AZURE_STORAGE_CONNECTION_STRING` is set |
 | `app/spotify_client.py` | Spotify Web API helpers (client credentials, user tokens, track normalization) |
 
 <hr>
@@ -94,19 +96,32 @@ Echofy has a built-in account system. Users can sign up and log in from the navi
 | `POST` | `/api/auth/signup` | Create a new account. Body: `{ email, username, password, confirmPassword, acceptedTerms }` |
 | `POST` | `/api/auth/login` | Sign in. Body: `{ username, password }` |
 | `POST` | `/api/auth/logout` | Sign out (requires active session) |
-| `GET` | `/api/auth/me` | Check current session (returns `{ authenticated, user }`) |
+| `GET` | `/api/auth/me` | Check current session (returns `{ authenticated, user }` including optional `profile_image_url`) |
+| `GET` | `/api/auth/profile` | Full profile for the logged-in user (requires session) |
+| `PUT` | `/api/auth/profile` | Update profile fields (`age`, `sex` or `gender`, `bio`, etc.) |
+| `POST` | `/api/auth/profile/photo` | Upload profile image — `multipart/form-data` field `file` (JPEG/PNG/WebP, max 5 MB); requires Azure Blob config |
+| `DELETE` | `/api/auth/profile/photo` | Remove profile photo from storage and clear URL |
 
 ### Database
 
 By default, the backend uses **SQLite** (`backend/instance/echofy.db`) — no setup required, the database file is created automatically on first run. The path is absolute so the same database is used regardless of which directory you start the server from.
 
-To use **Azure SQL** in production, set `AZURE_SQL_CONNECTION_STRING` in your `.env`:
+To use **Azure SQL** in production, set `AZURE_SQL_CONNECTION_STRING` in `env`:
 
 ```
-AZURE_SQL_CONNECTION_STRING=Driver={ODBC Driver 18 for SQL Server};Server=tcp:yourserver.database.windows.net,1433;Database=echofy;Uid=admin;Pwd=yourpassword;Encrypt=yes;TrustServerCertificate=no;
+AZURE_SQL_CONNECTION_STRING=Driver={ODBC Driver 18 for SQL Server};Server=tcp:yourserver.database.windows.net,1433;Database=echofy-relational-db;Uid=admin;Pwd=yourpassword;Encrypt=yes;TrustServerCertificate=no;
 ```
 
 The app switches automatically — no code changes needed. You can also set `DATABASE_URL` for any other SQLAlchemy-compatible database (PostgreSQL, MySQL, etc.).
+
+**Schema updates:** On startup, after `create_all()`, the app compares the `users` table to the SQLAlchemy `User` model and runs `ALTER TABLE ... ADD` for any **missing** columns (for **SQLite** and **Microsoft SQL Server / Azure SQL** only). That way an older Azure `users` table gains fields such as `age`, `sex`, `bio`, `profile_image_url`, and privacy flags without a manual migration. Other databases are unchanged by this step.
+
+### Profile pictures (Azure Blob Storage)
+
+1. Create a **Storage account** and a **container** in [Azure Portal](https://portal.azure.com) (or CLI).
+2. Copy the storage account **connection string** into **`AZURE_STORAGE_CONNECTION_STRING`** in `.env` (or App Service application settings).
+3. Optionally set `AZURE_STORAGE_CONTAINER_PROFILES` (default echofy-profiles).. The app creates the container on first upload with **blob-level public read** so the stored HTTPS URL works in `<img src="...">`.
+4. Without a connection string, photo upload returns an error; the rest of the app still runs.
 
 <hr>
 
@@ -139,3 +154,6 @@ All variables go in a `.env` file at the repo root. The static frontend does **n
 | **Database** | |
 | `AZURE_SQL_CONNECTION_STRING` | Full ODBC connection string for Azure SQL (uses SQLite if not set). |
 | `DATABASE_URL` | Any SQLAlchemy URI — used if `AZURE_SQL_CONNECTION_STRING` is not set. |
+| **Azure Blob (profile photos)** | |
+| `AZURE_STORAGE_CONNECTION_STRING` | Storage account connection string; enables `POST/DELETE /api/auth/profile/photo`. |
+| `AZURE_STORAGE_CONTAINER_PROFILES` | Blob container name (default `echofy-profiles`). |

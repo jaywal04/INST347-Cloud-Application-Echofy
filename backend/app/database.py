@@ -35,9 +35,12 @@ def _build_database_uri() -> str:
 
 
 def init_db(app):
-    """Bind SQLAlchemy to *app* and create tables if they don't exist."""
+    """Bind SQLAlchemy to *app*, create tables if missing, then align `users` columns."""
     app.config.setdefault("SQLALCHEMY_DATABASE_URI", _build_database_uri())
     app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
     db.init_app(app)
     with app.app_context():
         db.create_all()
+        from app.schema_sync import ensure_user_table_columns
+
+        ensure_user_table_columns(db.engine)

@@ -19,6 +19,15 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     accepted_terms = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    age = db.Column(db.Integer, nullable=True)
+    sex = db.Column(db.String(20), nullable=True)
+    bio = db.Column(db.String(500), nullable=True)
+    location = db.Column(db.String(100), nullable=True)
+    favorite_genre = db.Column(db.String(50), nullable=True)
+    profile_public = db.Column(db.Boolean, default=True, nullable=False)
+    show_listening_history = db.Column(db.Boolean, default=True, nullable=False)
+    show_reviews = db.Column(db.Boolean, default=True, nullable=False)
+    profile_image_url = db.Column(db.String(2048), nullable=True)
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)

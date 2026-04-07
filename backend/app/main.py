@@ -78,7 +78,8 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = os.environ.get(
         "FLASK_SECRET_KEY", "dev-echofy-change-me-for-production"
     )
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SAMESITE"] = "None"
+    app.config["SESSION_COOKIE_SECURE"] = not app.debug
     app.config["SESSION_COOKIE_HTTPONLY"] = True
 
     cors_origins = [

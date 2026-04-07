@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profile — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="logo" href="index.html">Echo<span>fy</span></a>
+    <ul class="nav-links">
+      <li><a href="discover.html">Discover</a></li>
+      <li><a href="#">Friends</a></li>
+      <li><a href="#">Your Echo</a></li>
+      <li id="nav-auth"><a href="login.html" class="nav-cta">Sign In</a></li>
+    </ul>
+  </nav>
+
+  <div class="profile-page">
+    <!-- Profile header -->
+    <div class="profile-header">
+      <div class="profile-avatar-large" id="profile-avatar">??</div>
+      <div class="profile-header-info">
+        <h1 class="profile-username" id="profile-username">Loading...</h1>
+        <p class="profile-meta" id="profile-meta"></p>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="profile-tabs">
+      <button class="profile-tab active" data-tab="profile">Profile</button>
+      <button class="profile-tab" data-tab="privacy">Privacy</button>
+      <button class="profile-tab" data-tab="account">Account Control</button>
+    </div>
+
+    <!-- Profile Tab -->
+    <div class="profile-tab-content active" id="tab-profile">
+      <form id="profile-form">
+        <div class="profile-form-grid">
+          <div class="form-group">
+            <label for="prof-username">Username</label>
+            <input type="text" id="prof-username" disabled />
+          </div>
+          <div class="form-group">
+            <label for="prof-email">Email</label>
+            <input type="email" id="prof-email" disabled />
+          </div>
+          <div class="form-group">
+            <label for="prof-age">Age</label>
+            <input type="number" id="prof-age" min="13" max="120" placeholder="Your age" />
+          </div>
+          <div class="form-group">
+            <label for="prof-sex">Sex</label>
+            <select id="prof-sex">
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="non-binary">Non-binary</option>
+            </select>
+          </div>
+          <div class="form-group full-width">
+            <label for="prof-location">Location</label>
+            <input type="text" id="prof-location" placeholder="City, Country" maxlength="100" />
+          </div>
+          <div class="form-group full-width">
+            <label for="prof-genre">Favorite Genre</label>
+            <input type="text" id="prof-genre" placeholder="e.g. Jazz, Indie, Hip-Hop" maxlength="50" />
+          </div>
+          <div class="form-group full-width">
+            <label for="prof-bio">Bio</label>
+            <textarea id="prof-bio" rows="3" maxlength="500" placeholder="Tell us about yourself..."></textarea>
+          </div>
+          <div class="form-group full-width profile-photo-block">
+            <label for="prof-photo-file">Profile photo</label>
+            <input type="file" id="prof-photo-file" accept="image/jpeg,image/png,image/webp" />
+            <div class="profile-photo-actions">
+              <button type="button" class="btn-primary" id="btn-upload-photo">Upload photo</button>
+              <button type="button" class="btn-ghost" id="btn-remove-photo" disabled>Remove photo</button>
+            </div>
+            <p class="form-hint profile-photo-hint">JPEG, PNG, or WebP, max 5 MB. Requires <code>AZURE_STORAGE_CONNECTION_STRING</code> on the server.</p>
+          </div>
+        </div>
+        <div id="profile-msg" class="profile-msg" hidden></div>
+        <button type="submit" class="btn-primary profile-save" id="btn-save-profile">Save Changes</button>
+      </form>
+    </div>
+
+    <!-- Privacy Tab -->
+    <div class="profile-tab-content" id="tab-privacy">
+      <form id="privacy-form">
+        <div class="privacy-settings">
+          <div class="privacy-row">
+            <div class="privacy-info">
+              <h3>Public Profile</h3>
+              <p>Allow other users to see your profile page.</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="priv-public" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="privacy-row">
+            <div class="privacy-info">
+              <h3>Show Listening History</h3>
+              <p>Let others see what you've been listening to.</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="priv-history" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="privacy-row">
+            <div class="privacy-info">
+              <h3>Show Reviews</h3>
+              <p>Display your reviews on your public profile.</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="priv-reviews" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div id="privacy-msg" class="profile-msg" hidden></div>
+        <button type="submit" class="btn-primary profile-save" id="btn-save-privacy">Save Privacy Settings</button>
+      </form>
+    </div>
+
+    <!-- Account Control Tab -->
+    <div class="profile-tab-content" id="tab-account">
+      <div class="account-section">
+        <h2 class="account-section-title">Danger Zone</h2>
+        <div class="danger-zone">
+          <div class="danger-info">
+            <h3>Delete Account</h3>
+            <p>Permanently delete your account and all associated data. This action cannot be undone.</p>
+          </div>
+          <button class="btn-danger" id="btn-show-delete">Delete Account</button>
+        </div>
+
+        <!-- Delete confirmation (hidden by default) -->
+        <div class="delete-confirm" id="delete-confirm" hidden>
+          <p class="delete-warning">To confirm, please enter your password:</p>
+          <div class="form-group">
+            <input type="password" id="delete-password" placeholder="Enter your password" />
+          </div>
+          <div id="delete-msg" class="profile-msg" hidden></div>
+          <div class="delete-actions">
+            <button class="btn-ghost" id="btn-cancel-delete">Cancel</button>
+            <button class="btn-danger" id="btn-confirm-delete">Permanently Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <span>&copy; 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/profile.js" defer></script>
+</body>
+</html>

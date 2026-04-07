@@ -1,0 +1,291 @@
+(function () {
+  'use strict';
+
+  var API_BASE = window.ECHOFY_API_BASE || '';
+  var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+
+  // --- Tab switching ---
+  var tabs = document.querySelectorAll('.profile-tab');
+  var panels = document.querySelectorAll('.profile-tab-content');
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.remove('active'); });
+      panels.forEach(function (p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  function setLargeAvatar(el, username, imageUrl) {
+    if (!el) return;
+    el.textContent = '';
+    el.innerHTML = '';
+    if (imageUrl) {
+      var img = document.createElement('img');
+      img.src = imageUrl;
+      img.alt = username + ' profile photo';
+      img.className = 'profile-avatar-img';
+      el.appendChild(img);
+    } else {
+      el.textContent = username.substring(0, 2).toUpperCase();
+    }
+  }
+
+  // --- Nav auth state ---
+  function updateNav(user) {
+    var navAuth = document.getElementById('nav-auth');
+    if (!navAuth) return;
+    if (!user) return;
+    var initials = user.username.substring(0, 2).toUpperCase();
+    var link = document.createElement('a');
+    link.href = 'profile.html';
+    link.className = 'nav-profile-link';
+    if (user.profile_image_url) {
+      var img = document.createElement('img');
+      img.className = 'nav-avatar-img';
+      img.alt = '';
+      img.src = user.profile_image_url;
+      link.appendChild(img);
+    } else {
+      var div = document.createElement('div');
+      div.className = 'nav-avatar';
+      div.textContent = initials;
+      link.appendChild(div);
+    }
+    navAuth.innerHTML = '';
+    navAuth.appendChild(link);
+  }
+
+  // --- Load profile ---
+  function loadProfile() {
+    fetch(API_BASE + '/api/auth/profile', Object.assign({}, fetchOpts, { method: 'GET' }))
+      .then(function (res) {
+        if (res.status === 401) {
+          window.location.href = 'login.html';
+          return null;
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.ok) return;
+        var p = data.profile;
+
+        // Update nav
+        updateNav({ username: p.username, profile_image_url: p.profile_image_url });
+
+        // Header
+        setLargeAvatar(document.getElementById('profile-avatar'), p.username, p.profile_image_url);
+        document.getElementById('profile-username').textContent = p.username;
+
+        var removeBtn = document.getElementById('btn-remove-photo');
+        if (removeBtn) removeBtn.disabled = !p.profile_image_url;
+
+        var meta = 'Member since ' + new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        if (p.location) meta += '  ·  ' + p.location;
+        document.getElementById('profile-meta').textContent = meta;
+
+        // Profile form
+        document.getElementById('prof-username').value = p.username;
+        document.getElementById('prof-email').value = p.email;
+        document.getElementById('prof-age').value = p.age || '';
+        document.getElementById('prof-sex').value = p.sex || '';
+        document.getElementById('prof-location').value = p.location || '';
+        document.getElementById('prof-genre').value = p.favorite_genre || '';
+        document.getElementById('prof-bio').value = p.bio || '';
+
+        // Privacy
+        document.getElementById('priv-public').checked = p.profile_public;
+        document.getElementById('priv-history').checked = p.show_listening_history;
+        document.getElementById('priv-reviews').checked = p.show_reviews;
+      })
+      .catch(function () {
+        document.getElementById('profile-username').textContent = 'Error loading profile';
+      });
+  }
+
+  loadProfile();
+
+  // --- Helper: show message ---
+  function showMsg(el, text, isError) {
+    el.hidden = false;
+    el.textContent = text;
+    el.className = 'profile-msg ' + (isError ? 'msg-error' : 'msg-success');
+    setTimeout(function () { el.hidden = true; }, 3000);
+  }
+
+  // --- Save profile ---
+  document.getElementById('profile-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('btn-save-profile');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var body = {
+      age: document.getElementById('prof-age').value ? parseInt(document.getElementById('prof-age').value) : null,
+      sex: document.getElementById('prof-sex').value,
+      bio: document.getElementById('prof-bio').value,
+      location: document.getElementById('prof-location').value,
+      favorite_genre: document.getElementById('prof-genre').value,
+    };
+
+    fetch(API_BASE + '/api/auth/profile', Object.assign({}, fetchOpts, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var msgEl = document.getElementById('profile-msg');
+        if (data.ok) {
+          showMsg(msgEl, 'Profile updated successfully.', false);
+          loadProfile();
+        } else {
+          showMsg(msgEl, (data.errors || ['Failed to save.']).join(' '), true);
+        }
+      })
+      .catch(function () {
+        showMsg(document.getElementById('profile-msg'), 'Network error.', true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+      });
+  });
+
+  // --- Profile photo upload / remove ---
+  document.getElementById('btn-upload-photo').addEventListener('click', function () {
+    var input = document.getElementById('prof-photo-file');
+    var msgEl = document.getElementById('profile-msg');
+    if (!input.files || !input.files[0]) {
+      showMsg(msgEl, 'Choose an image file first.', true);
+      return;
+    }
+    var btn = document.getElementById('btn-upload-photo');
+    btn.disabled = true;
+    btn.textContent = 'Uploading...';
+    var fd = new FormData();
+    fd.append('file', input.files[0]);
+    fetch(API_BASE + '/api/auth/profile/photo', { method: 'POST', credentials: 'include', body: fd })
+      .then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
+      .then(function (x) {
+        if (x.data.ok) {
+          showMsg(msgEl, 'Photo updated.', false);
+          input.value = '';
+          loadProfile();
+        } else {
+          showMsg(msgEl, (x.data.errors || ['Upload failed.']).join(' '), true);
+        }
+      })
+      .catch(function () {
+        showMsg(msgEl, 'Network error.', true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Upload photo';
+      });
+  });
+
+  document.getElementById('btn-remove-photo').addEventListener('click', function () {
+    var msgEl = document.getElementById('profile-msg');
+    var btn = document.getElementById('btn-remove-photo');
+    btn.disabled = true;
+    fetch(API_BASE + '/api/auth/profile/photo', { method: 'DELETE', credentials: 'include' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          showMsg(msgEl, 'Photo removed.', false);
+          loadProfile();
+        } else {
+          showMsg(msgEl, (data.errors || ['Could not remove photo.']).join(' '), true);
+        }
+      })
+      .catch(function () {
+        showMsg(msgEl, 'Network error.', true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+  });
+
+  // --- Save privacy ---
+  document.getElementById('privacy-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('btn-save-privacy');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var body = {
+      profile_public: document.getElementById('priv-public').checked,
+      show_listening_history: document.getElementById('priv-history').checked,
+      show_reviews: document.getElementById('priv-reviews').checked,
+    };
+
+    fetch(API_BASE + '/api/auth/privacy', Object.assign({}, fetchOpts, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var msgEl = document.getElementById('privacy-msg');
+        if (data.ok) {
+          showMsg(msgEl, 'Privacy settings saved.', false);
+        } else {
+          showMsg(msgEl, (data.errors || ['Failed to save.']).join(' '), true);
+        }
+      })
+      .catch(function () {
+        showMsg(document.getElementById('privacy-msg'), 'Network error.', true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Save Privacy Settings';
+      });
+  });
+
+  // --- Delete account ---
+  var deleteConfirm = document.getElementById('delete-confirm');
+
+  document.getElementById('btn-show-delete').addEventListener('click', function () {
+    deleteConfirm.hidden = false;
+  });
+
+  document.getElementById('btn-cancel-delete').addEventListener('click', function () {
+    deleteConfirm.hidden = true;
+    document.getElementById('delete-password').value = '';
+    document.getElementById('delete-msg').hidden = true;
+  });
+
+  document.getElementById('btn-confirm-delete').addEventListener('click', function () {
+    var password = document.getElementById('delete-password').value;
+    var msgEl = document.getElementById('delete-msg');
+
+    if (!password) {
+      showMsg(msgEl, 'Please enter your password.', true);
+      return;
+    }
+
+    var btn = document.getElementById('btn-confirm-delete');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    fetch(API_BASE + '/api/auth/account', Object.assign({}, fetchOpts, {
+      method: 'DELETE',
+      body: JSON.stringify({ password: password }),
+    }))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          window.location.href = 'index.html';
+        } else {
+          showMsg(msgEl, (data.errors || ['Failed to delete account.']).join(' '), true);
+        }
+      })
+      .catch(function () {
+        showMsg(msgEl, 'Network error.', true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Permanently Delete';
+      });
+  });
+})();

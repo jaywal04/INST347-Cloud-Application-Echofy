@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from flask_sqlalchemy import SQLAlchemy
 
@@ -22,7 +23,7 @@ def _build_database_uri() -> str:
     if azure_conn:
         # pyodbc connection string for Azure SQL
         # Example: "Driver={ODBC Driver 18 for SQL Server};Server=tcp:myserver.database.windows.net,1433;Database=echofy;Uid=admin;Pwd=secret;Encrypt=yes;TrustServerCertificate=no;"
-        return f"mssql+pyodbc:///?odbc_connect={azure_conn}"
+        return f"mssql+pyodbc:///?odbc_connect={quote_plus(azure_conn)}"
 
     generic = os.environ.get("DATABASE_URL", "").strip()
     if generic:

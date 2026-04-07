@@ -85,13 +85,15 @@ def create_app() -> Flask:
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
-    # Allow the Azure Static Web Apps frontend in production.
+    # Allow the Azure Static Web Apps frontend in production (comma-separated).
     backend_url = os.environ.get("ECHOFY_BACKEND_URL", "").strip()
-    swa_url = os.environ.get("ECHOFY_SWA_URL", "").strip()
-    if swa_url:
-        if not swa_url.startswith("http"):
-            swa_url = "https://" + swa_url
-        cors_origins.append(swa_url)
+    for origin in os.environ.get("ECHOFY_SWA_URL", "").split(","):
+        origin = origin.strip()
+        if not origin:
+            continue
+        if not origin.startswith("http"):
+            origin = "https://" + origin
+        cors_origins.append(origin)
 
     CORS(
         app,

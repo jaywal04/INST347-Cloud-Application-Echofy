@@ -1,9 +1,7 @@
 (function () {
   'use strict';
 
-  var host = window.location.hostname;
-  var API_BASE =
-    host === 'localhost' || host === '127.0.0.1' ? 'http://127.0.0.1:5000' : '';
+  var API_BASE = window.ECHOFY_API_BASE || '';
 
   var fetchOpts = {
     credentials: 'include',

@@ -81,12 +81,21 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_HTTPONLY"] = True
 
+    cors_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    # Allow the Azure Static Web Apps frontend in production.
+    backend_url = os.environ.get("ECHOFY_BACKEND_URL", "").strip()
+    swa_url = os.environ.get("ECHOFY_SWA_URL", "").strip()
+    if swa_url:
+        if not swa_url.startswith("http"):
+            swa_url = "https://" + swa_url
+        cors_origins.append(swa_url)
+
     CORS(
         app,
-        origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
+        origins=cors_origins,
         supports_credentials=True,
     )
 
@@ -109,6 +118,13 @@ def create_app() -> Flask:
     @app.get("/api/health")
     def health():
         return jsonify(status="ok")
+
+    @app.get("/api/config")
+    def api_config():
+        url = backend_url
+        if url and not url.startswith("http"):
+            url = "https://" + url
+        return jsonify(backend_url=url or None)
 
     @app.get("/api/spotify/session")
     def spotify_session():

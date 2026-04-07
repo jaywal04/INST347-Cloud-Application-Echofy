@@ -16,5 +16,5 @@
   }
 
   // Production — point to the deployed backend.
-  window.ECHOFY_API_BASE = 'https://echofy-backend.azurewebsites.net';
+  window.ECHOFY_API_BASE = 'https://echofy-backend-c7b8a0are7abgxhn.canadacentral-01.azurewebsites.net';
 })();

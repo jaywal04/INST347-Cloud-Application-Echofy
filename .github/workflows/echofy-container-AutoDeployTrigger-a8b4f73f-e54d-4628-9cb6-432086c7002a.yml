@@ -4,11 +4,14 @@ name: Trigger auto deployment for echofy-container
 on:
   # Automatically trigger it when detected changes in repo
   push:
-    branches: 
-      [ main ]
+    branches:
+      - main
     paths:
-    - '**'
-    - '.github/workflows/echofy-container-AutoDeployTrigger-a8b4f73f-e54d-4628-9cb6-432086c7002a.yml'
+      - 'backend/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - 'docker/**'
+      - '.github/workflows/echofy-container-AutoDeployTrigger-a8b4f73f-e54d-4628-9cb6-432086c7002a.yml'
 
   # Allow manual trigger 
   workflow_dispatch:      
@@ -22,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout to the branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Azure Login
         uses: azure/login@v2

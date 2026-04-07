@@ -6,9 +6,21 @@ import os
 from pathlib import Path
 from urllib.parse import quote_plus
 
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+
+def apply_remote_db_engine_options(app: Flask) -> None:
+    """Azure SQL and similar hosts often close idle TCP connections; refresh pooled conns."""
+    uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
+    if not uri or uri.startswith("sqlite"):
+        return
+    opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
+    opts.setdefault("pool_pre_ping", True)
+    opts.setdefault("pool_recycle", 1800)
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = opts
 
 
 def _build_database_uri() -> str:
@@ -38,6 +50,7 @@ def init_db(app):
     """Bind SQLAlchemy to *app*, create tables if missing, then align `users` columns."""
     app.config.setdefault("SQLALCHEMY_DATABASE_URI", _build_database_uri())
     app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
+    apply_remote_db_engine_options(app)
     db.init_app(app)
     with app.app_context():
         db.create_all()

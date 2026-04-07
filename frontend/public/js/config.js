@@ -15,16 +15,6 @@
     return;
   }
 
-  // Production — try to discover backend URL from the backend itself.
-  // The deploy sets ECHOFY_BACKEND_URL in .env; the backend exposes it at /api/config.
-  window.ECHOFY_API_BASE = '';
-
-  var stored = sessionStorage.getItem('echofy_api_base');
-  if (stored) {
-    window.ECHOFY_API_BASE = stored;
-    return;
-  }
-
-  // Discover from a well-known backend host.
-  // Falls back gracefully — features that need the API will show a helpful message.
+  // Production — point to the deployed backend.
+  window.ECHOFY_API_BASE = 'https://echofy-backend.azurewebsites.net';
 })();

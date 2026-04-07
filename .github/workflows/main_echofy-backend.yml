@@ -35,6 +35,7 @@ jobs:
           mkdir deploy
           cp -r backend/app deploy/app
           cp requirements.txt deploy/requirements.txt
+          cp backend/startup.sh deploy/startup.sh
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4

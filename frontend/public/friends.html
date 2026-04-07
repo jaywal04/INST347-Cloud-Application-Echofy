@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Friends — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <nav>
+    <a class="logo" href="index.html">Echo<span>fy</span></a>
+    <ul class="nav-links">
+      <li><a href="discover.html">Discover</a></li>
+      <li><a href="friends.html">Friends</a></li>
+      <li><a href="#">Your Echo</a></li>
+      <li id="nav-auth"><a href="login.html" class="nav-cta">Sign In</a></li>
+    </ul>
+  </nav>
+
+  <div class="profile-page friends-page">
+    <div class="profile-header">
+      <div class="profile-header-info">
+        <h1 class="profile-username">Friends</h1>
+        <p class="profile-meta">Find people, send requests, and see who you’re connected with.</p>
+      </div>
+    </div>
+
+    <section class="friends-section">
+      <h2 class="friends-section-title">Find people</h2>
+      <p class="friends-section-desc">Search by username (at least 2 characters). Only public profiles appear.</p>
+      <div class="friends-search-wrap">
+        <input type="search" id="friend-search-input" class="friends-search-input" placeholder="Search username..." autocomplete="off" />
+      </div>
+      <ul id="friend-search-results" class="friends-list" hidden></ul>
+      <p id="friend-search-empty" class="friends-hint" hidden>No matching users.</p>
+      <div id="friend-search-msg" class="profile-msg friends-inline-msg" hidden></div>
+    </section>
+
+    <section class="friends-section">
+      <h2 class="friends-section-title">Incoming requests</h2>
+      <ul id="friend-incoming-list" class="friends-list"></ul>
+      <p id="friend-incoming-empty" class="friends-hint">No pending requests.</p>
+    </section>
+
+    <section class="friends-section">
+      <h2 class="friends-section-title">Sent requests</h2>
+      <ul id="friend-outgoing-list" class="friends-list"></ul>
+      <p id="friend-outgoing-empty" class="friends-hint">No outgoing requests.</p>
+    </section>
+
+    <section class="friends-section">
+      <h2 class="friends-section-title">Your friends</h2>
+      <ul id="friend-list" class="friends-list friends-friend-grid"></ul>
+      <p id="friend-list-empty" class="friends-hint">You don’t have any friends yet. Search above to add someone.</p>
+    </section>
+  </div>
+
+  <footer>
+    <span>&copy; 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav-auth.js" defer></script>
+  <script src="js/friends.js" defer></script>
+</body>
+</html>

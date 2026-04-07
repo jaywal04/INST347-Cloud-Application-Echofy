@@ -10,6 +10,29 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app.database import db
 
 
+class FriendRequest(db.Model):
+    """Directed friend request: from_user → to_user. When accepted, the row stays as status accepted."""
+
+    __tablename__ = "friend_requests"
+    __table_args__ = (
+        db.UniqueConstraint("from_user_id", "to_user_id", name="uq_friend_requests_from_to"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    from_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    to_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    from_user = db.relationship("User", foreign_keys=[from_user_id], backref=db.backref("friend_requests_sent", lazy="dynamic"))
+    to_user = db.relationship("User", foreign_keys=[to_user_id], backref=db.backref("friend_requests_received", lazy="dynamic"))
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 

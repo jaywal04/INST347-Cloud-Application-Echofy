@@ -2,10 +2,11 @@
 #
 # GitHub secrets — use ONE of these registry options:
 #
-# Option A (matches many Azure-generated workflows):
-#   ECHOFYCONTAINER_REGISTRY_URL — login server only, e.g. myregistry.azurecr.io (no https://)
+# Option A (registry login — typical Azure-generated secrets):
 #   ECHOFYCONTAINER_REGISTRY_USERNAME
 #   ECHOFYCONTAINER_REGISTRY_PASSWORD
+#   Optional: ECHOFYCONTAINER_REGISTRY_URL (e.g. myregistry.azurecr.io). If omitted, URL is
+#   assumed to be {USERNAME}.azurecr.io (standard ACR admin username = registry name).
 #
 # Option B (OIDC push to ACR, no registry password):
 #   ECHOFYCONTAINER_ACR_NAME — short registry name only (e.g. myregistry)
@@ -55,6 +56,8 @@ jobs:
         env:
           ACR_NAME: ${{ secrets.ECHOFYCONTAINER_ACR_NAME }}
           REGISTRY_URL: ${{ secrets.ECHOFYCONTAINER_REGISTRY_URL }}
+          REGISTRY_USER: ${{ secrets.ECHOFYCONTAINER_REGISTRY_USERNAME }}
+          REGISTRY_PASS: ${{ secrets.ECHOFYCONTAINER_REGISTRY_PASSWORD }}
         run: |
           set -e
           URL_RAW="${REGISTRY_URL:-}"
@@ -69,8 +72,13 @@ jobs:
             echo "mode=acr" >> "$GITHUB_OUTPUT"
             echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
             echo "image=${ACR_NAME}.azurecr.io/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          elif [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASS" ]; then
+            echo "mode=registry" >> "$GITHUB_OUTPUT"
+            echo "registry_url=${REGISTRY_USER}.azurecr.io" >> "$GITHUB_OUTPUT"
+            echo "image=${REGISTRY_USER}.azurecr.io/echofy:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using registry ${REGISTRY_USER}.azurecr.io from USERNAME (set ECHOFYCONTAINER_REGISTRY_URL if your login server differs)."
           else
-            echo "::error::Set ECHOFYCONTAINER_REGISTRY_URL (e.g. myregistry.azurecr.io) plus USERNAME/PASSWORD, OR set ECHOFYCONTAINER_ACR_NAME for OIDC-only ACR push."
+            echo "::error::Set ECHOFYCONTAINER_REGISTRY_USERNAME and ECHOFYCONTAINER_REGISTRY_PASSWORD (ACR admin: username is usually the registry name), and optionally ECHOFYCONTAINER_REGISTRY_URL. Or set ECHOFYCONTAINER_ACR_NAME for OIDC-only push."
             exit 1
           fi
 

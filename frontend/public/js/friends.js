@@ -178,6 +178,12 @@
     searchTimer = setTimeout(function () { runSearch(q); }, 300);
   });
 
+  document.getElementById('friend-search-btn').addEventListener('click', function () {
+    var q = document.getElementById('friend-search-input').value.trim();
+    if (searchTimer) clearTimeout(searchTimer);
+    runSearch(q);
+  });
+
   document.getElementById('friend-search-results').addEventListener('click', function (e) {
     var btn = e.target.closest('[data-add-user]');
     if (!btn) return;

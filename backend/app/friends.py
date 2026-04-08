@@ -64,10 +64,10 @@ def search_users():
     hide_ids = _related_user_ids_for_search(me_id)
     hide_ids.add(me_id)
 
-    pattern = f"%{q.lower()}%"
+    pattern = f"%{q}%"
     qry = User.query.filter(
-        User.profile_public.is_(True),
-        func.lower(User.username).like(pattern),
+        User.profile_public == True,
+        User.username.ilike(pattern),
         ~User.id.in_(hide_ids),
     )
     users = qry.order_by(User.username).limit(20).all()

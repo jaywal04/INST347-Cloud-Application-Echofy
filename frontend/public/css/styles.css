@@ -47,6 +47,10 @@ nav {
   z-index: 100;
   background: linear-gradient(to bottom, rgba(8,13,26,0.98) 0%, rgba(8,13,26,0.0) 100%);
   backdrop-filter: blur(2px);
+  visibility: hidden;
+}
+nav.ready {
+  visibility: visible;
 }
 
 .logo {
@@ -931,10 +935,6 @@ footer a:hover { color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  visibility: hidden;
-}
-#nav-auth.ready {
-  visibility: visible;
 }
 
 /* ========== NAV NOTIFICATION BELL ========== */

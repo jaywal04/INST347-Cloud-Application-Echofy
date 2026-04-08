@@ -32,31 +32,6 @@
     }
   }
 
-  // --- Nav auth state ---
-  function updateNav(user) {
-    var navAuth = document.getElementById('nav-auth');
-    if (!navAuth) return;
-    if (!user) return;
-    var initials = user.username.substring(0, 2).toUpperCase();
-    var link = document.createElement('a');
-    link.href = 'profile';
-    link.className = 'nav-profile-link';
-    if (user.profile_image_url) {
-      var img = document.createElement('img');
-      img.className = 'nav-avatar-img';
-      img.alt = '';
-      img.src = user.profile_image_url;
-      link.appendChild(img);
-    } else {
-      var div = document.createElement('div');
-      div.className = 'nav-avatar';
-      div.textContent = initials;
-      link.appendChild(div);
-    }
-    navAuth.innerHTML = '';
-    navAuth.appendChild(link);
-  }
-
   // --- Load profile ---
   function loadProfile() {
     fetch(API_BASE + '/api/auth/profile', Object.assign({}, fetchOpts, { method: 'GET' }))
@@ -70,9 +45,6 @@
       .then(function (data) {
         if (!data || !data.ok) return;
         var p = data.profile;
-
-        // Update nav
-        updateNav({ username: p.username, profile_image_url: p.profile_image_url });
 
         // Header
         setLargeAvatar(document.getElementById('profile-avatar'), p.username, p.profile_image_url);

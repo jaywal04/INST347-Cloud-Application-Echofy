@@ -4,8 +4,8 @@
   var API_BASE = window.ECHOFY_API_BASE || '';
 
   function reveal() {
-    var el = document.getElementById('nav-auth');
-    if (el) el.classList.add('ready');
+    var nav = document.querySelector('nav');
+    if (nav) nav.classList.add('ready');
   }
 
   fetch(API_BASE + '/api/auth/me', { credentials: 'include' })

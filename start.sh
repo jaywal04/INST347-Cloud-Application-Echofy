@@ -6,7 +6,7 @@ START_SH="$ROOT/start.sh"
 
 if [[ "${1:-}" == "backend" ]]; then
   export PYTHONPATH="${ROOT}/backend"
-  export PORT="${PORT:-5000}"
+  export PORT="${PORT:-5001}"
   cd "$ROOT"
   PY=""
   if [[ -x "$ROOT/.venv/bin/python3" ]]; then
@@ -58,24 +58,22 @@ fi
 
 if [[ "${1:-}" == "frontend" ]]; then
   cd "$ROOT"
-  PORT="${PORT:-3000}"
+  export PORT="${PORT:-3001}"
   PY=""
   if [[ -x "$ROOT/.venv/bin/python3" ]]; then
     PY="$ROOT/.venv/bin/python3"
   elif [[ -x "$ROOT/.venv/bin/python" ]]; then
     PY="$ROOT/.venv/bin/python"
   fi
-  echo "Frontend at http://localhost:${PORT}/"
-  echo "Press Ctrl+C to stop."
   if [[ -n "$PY" ]]; then
-    exec "$PY" -m http.server "$PORT" --directory frontend/public
+    exec "$PY" frontend/server.py
   fi
   if command -v python3 >/dev/null 2>&1; then
-    exec python3 -m http.server "$PORT" --directory frontend/public
+    exec python3 frontend/server.py
   elif command -v python >/dev/null 2>&1; then
     PYVER="$(python -c 'import sys; print(sys.version_info[0])' 2>/dev/null || echo 0)"
     if [[ "$PYVER" -ge 3 ]]; then
-      exec python -m http.server "$PORT" --directory frontend/public
+      exec python frontend/server.py
     fi
   fi
   echo "Python 3 is required."
@@ -114,13 +112,13 @@ run_linux_term() {
 
 case "$(uname -s)" in
   Darwin*)
-    echo "Opening two Terminal windows: Backend :5000 and Frontend :3000"
+    echo "Opening two Terminal windows: Backend :5001 and Frontend :3001"
     run_in_new_mac_terminal "cd \"$ROOT\" && bash \"$START_SH\" backend"
     sleep 0.5
     run_in_new_mac_terminal "cd \"$ROOT\" && bash \"$START_SH\" frontend"
     ;;
   Linux*)
-    echo "Opening two terminal windows: Backend :5000 and Frontend :3000"
+    echo "Opening two terminal windows: Backend :5001 and Frontend :3001"
     if ! run_linux_term "bash $(printf %q "$START_SH") backend"; then
       echo "No supported terminal emulator found. Run in two tabs:"
       echo "  ./start.sh backend"

@@ -39,7 +39,7 @@
     if (!user) return;
     var initials = user.username.substring(0, 2).toUpperCase();
     var link = document.createElement('a');
-    link.href = 'profile.html';
+    link.href = 'profile';
     link.className = 'nav-profile-link';
     if (user.profile_image_url) {
       var img = document.createElement('img');
@@ -62,7 +62,7 @@
     fetch(API_BASE + '/api/auth/profile', Object.assign({}, fetchOpts, { method: 'GET' }))
       .then(function (res) {
         if (res.status === 401) {
-          window.location.href = 'login.html';
+          window.location.href = 'login';
           return null;
         }
         return res.json();
@@ -275,7 +275,7 @@
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data.ok) {
-          window.location.href = 'index.html';
+          window.location.href = '/';
         } else {
           showMsg(msgEl, (data.errors || ['Failed to delete account.']).join(' '), true);
         }

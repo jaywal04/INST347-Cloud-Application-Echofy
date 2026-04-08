@@ -54,7 +54,7 @@
 
   btn.addEventListener('click', function () {
     if (!API_BASE) {
-      statusEl.textContent = 'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5000.';
+      statusEl.textContent = 'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
       return;
     }
 
@@ -162,7 +162,7 @@
       })
       .catch(function (err) {
         console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
-        statusEl.textContent = 'Network error. Is the backend running on http://127.0.0.1:5000 ?';
+        statusEl.textContent = 'Network error. Is the backend running on http://127.0.0.1:5001 ?';
       })
       .finally(function () {
         setLoading(false);

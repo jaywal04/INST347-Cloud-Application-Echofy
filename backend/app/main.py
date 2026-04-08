@@ -16,7 +16,7 @@ from app.envutil import first_non_empty
 from app.models import User
 from app.spotify_client import SPOTIFY_TOKEN_URL, fetch_top_tracks_for_response
 
-PORT = int(os.environ.get("PORT", "5000"))
+PORT = int(os.environ.get("PORT", "5001"))
 
 # Load repo-root .env (backend/app/main.py → parents[2] = project root)
 _ROOT = Path(__file__).resolve().parent.parent.parent
@@ -62,14 +62,14 @@ def _spotify_redirect_uri() -> str:
     raw = first_non_empty("SPOTIFY_REDIRECT_URI", "SPOTIPY_REDIRECT_URI")
     if raw:
         return _strip_env_quotes(raw)
-    return "http://127.0.0.1:5000/callback"
+    return "http://127.0.0.1:5001/callback"
 
 
 def _oauth_success_url() -> str:
     return _strip_env_quotes(
         os.environ.get(
             "ECHOFY_OAUTH_SUCCESS_URL",
-            "http://127.0.0.1:3000/discover.html?spotify=connected",
+            "http://127.0.0.1:3001/discover?spotify=connected",
         )
     )
 
@@ -84,8 +84,8 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_HTTPONLY"] = True
 
     cors_origins = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
     ]
     # Allow the Azure Static Web Apps frontend in production (comma-separated).
     backend_url = os.environ.get("ECHOFY_BACKEND_URL", "").strip()

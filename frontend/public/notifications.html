@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notifications — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <div id="navbar"></div>
+  <script src="js/navbar.js"></script>
+
+  <div class="profile-page notifications-page">
+    <div class="profile-header">
+      <div class="profile-header-info">
+        <h1 class="profile-username">Notifications</h1>
+        <p class="profile-meta">Friend requests and activity.</p>
+      </div>
+    </div>
+
+    <section class="friends-section">
+      <h2 class="friends-section-title">Friend requests</h2>
+      <ul id="notif-requests" class="friends-list"></ul>
+      <p id="notif-empty" class="friends-hint">No new notifications.</p>
+    </section>
+  </div>
+
+  <footer>
+    <span>&copy; 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav-auth.js" defer></script>
+  <script src="js/notifications.js" defer></script>
+</body>
+</html>

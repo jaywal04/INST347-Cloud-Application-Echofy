@@ -23,7 +23,7 @@
     return fetch(API_BASE + '/api/friends', Object.assign({}, fetchOpts, { method: 'GET' }))
       .then(function (res) {
         if (res.status === 401) {
-          window.location.href = 'login.html';
+          window.location.href = 'login';
           return null;
         }
         return res.json();
@@ -145,7 +145,7 @@
     fetch(API_BASE + '/api/users/search?q=' + encodeURIComponent(q), Object.assign({}, fetchOpts, { method: 'GET' }))
       .then(function (res) {
         if (res.status === 401) {
-          window.location.href = 'login.html';
+          window.location.href = 'login';
           return null;
         }
         return res.json();
@@ -178,11 +178,6 @@
     searchTimer = setTimeout(function () { runSearch(q); }, 300);
   });
 
-  document.getElementById('friend-search-btn').addEventListener('click', function () {
-    var q = document.getElementById('friend-search-input').value.trim();
-    if (searchTimer) clearTimeout(searchTimer);
-    runSearch(q);
-  });
 
   document.getElementById('friend-search-results').addEventListener('click', function (e) {
     var btn = e.target.closest('[data-add-user]');

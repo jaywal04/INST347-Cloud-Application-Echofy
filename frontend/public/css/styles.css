@@ -14,7 +14,7 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-y: scroll; }
 
 body {
   background: var(--navy-deep);
@@ -67,6 +67,7 @@ nav {
   gap: 2.2rem;
   list-style: none;
   align-items: center;
+  padding-right: 5rem;
 }
 
 .nav-links a {
@@ -922,6 +923,56 @@ footer a:hover { color: var(--accent); }
   margin-top: 1.5rem;
 }
 
+#nav-auth {
+  position: absolute;
+  right: 3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  visibility: hidden;
+}
+#nav-auth.ready {
+  visibility: visible;
+}
+
+/* ========== NAV NOTIFICATION BELL ========== */
+.nav-notif-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 0.5rem;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+
+.nav-notif-link:hover {
+  color: var(--accent-gold);
+}
+
+.nav-notif-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.nav-notif-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* ========== NAV PROFILE ICON ========== */
 .nav-profile-link {
   display: flex;
@@ -1311,31 +1362,11 @@ footer a:hover { color: var(--accent); }
 }
 
 .friends-search-wrap {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
   margin-bottom: 0.75rem;
 }
 
-.btn-search {
-  padding: 0.65rem 1.2rem;
-  background: var(--accent-gold);
-  color: var(--navy-deep);
-  border: none;
-  border-radius: 4px;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-search:hover {
-  opacity: 0.85;
-}
-
 .friends-search-input {
-  flex: 1;
+  width: 100%;
   max-width: 320px;
   padding: 0.65rem 0.9rem;
   border: 1px solid var(--navy-border);

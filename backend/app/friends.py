@@ -94,6 +94,14 @@ def list_friends():
     return jsonify(ok=True, friends=friends)
 
 
+@friends_bp.get("/api/notifications/count")
+@login_required
+def notification_count():
+    me_id = current_user.id
+    count = FriendRequest.query.filter_by(to_user_id=me_id, status="pending").count()
+    return jsonify(ok=True, count=count)
+
+
 @friends_bp.get("/api/friends/requests/incoming")
 @login_required
 def incoming_requests():

@@ -1,7 +1,7 @@
 /**
  * Shared API configuration.
  *
- * Local dev  → http://127.0.0.1:5000
+ * Local dev  → http://127.0.0.1:5001
  * Production → fetched from the backend's /api/config endpoint,
  *              or set ECHOFY_BACKEND_URL in .env on the server.
  */
@@ -11,7 +11,7 @@
   var host = window.location.hostname;
 
   if (host === 'localhost' || host === '127.0.0.1') {
-    window.ECHOFY_API_BASE = 'http://127.0.0.1:5000';
+    window.ECHOFY_API_BASE = 'http://127.0.0.1:5001';
     return;
   }
 

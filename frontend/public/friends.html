@@ -9,15 +9,8 @@
 </head>
 <body>
 
-  <nav>
-    <a class="logo" href="index.html">Echo<span>fy</span></a>
-    <ul class="nav-links">
-      <li><a href="discover.html">Discover</a></li>
-      <li><a href="friends.html">Friends</a></li>
-      <li><a href="#">Your Echo</a></li>
-      <li id="nav-auth"><a href="login.html" class="nav-cta">Sign In</a></li>
-    </ul>
-  </nav>
+  <div id="navbar"></div>
+  <script src="js/navbar.js"></script>
 
   <div class="profile-page friends-page">
     <div class="profile-header">
@@ -32,7 +25,6 @@
       <p class="friends-section-desc">Search by username (at least 2 characters). Only public profiles appear.</p>
       <div class="friends-search-wrap">
         <input type="search" id="friend-search-input" class="friends-search-input" placeholder="Search username..." autocomplete="off" />
-        <button type="button" id="friend-search-btn" class="btn-search">Search</button>
       </div>
       <ul id="friend-search-results" class="friends-list" hidden></ul>
       <p id="friend-search-empty" class="friends-hint" hidden>No matching users.</p>

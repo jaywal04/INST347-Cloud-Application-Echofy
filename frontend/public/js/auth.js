@@ -126,10 +126,10 @@
             return;
           }
           // Success — redirect to discover page
-          window.location.href = 'discover.html';
+          window.location.href = 'discover';
         })
         .catch(function () {
-          showError('Network error. Is the backend running on http://127.0.0.1:5000?');
+          showError('Network error. Is the backend running on http://127.0.0.1:5001?');
         })
         .finally(function () {
           btn.disabled = false;
@@ -169,10 +169,10 @@
             showError(ref.data.errors || ['Invalid username or password.']);
             return;
           }
-          window.location.href = 'discover.html';
+          window.location.href = 'discover';
         })
         .catch(function () {
-          showError('Network error. Is the backend running on http://127.0.0.1:5000?');
+          showError('Network error. Is the backend running on http://127.0.0.1:5001?');
         })
         .finally(function () {
           btn.disabled = false;

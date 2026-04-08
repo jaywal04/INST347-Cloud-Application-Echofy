@@ -19,7 +19,11 @@ def apply_remote_db_engine_options(app: Flask) -> None:
         return
     opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
     opts.setdefault("pool_pre_ping", True)
-    opts.setdefault("pool_recycle", 1800)
+    opts.setdefault("pool_recycle", 300)
+    opts.setdefault("pool_timeout", 30)
+    opts.setdefault("pool_size", 5)
+    opts.setdefault("max_overflow", 2)
+    opts.setdefault("connect_args", {"timeout": 30})
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = opts
 
 

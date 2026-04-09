@@ -39,6 +39,10 @@ def _build_database_uri() -> str:
     if azure_conn:
         # pyodbc connection string for Azure SQL
         # Example: "Driver={ODBC Driver 18 for SQL Server};Server=tcp:myserver.database.windows.net,1433;Database=echofy;Uid=admin;Pwd=secret;Encrypt=yes;TrustServerCertificate=no;"
+        # Inject ODBC driver-level retry so the driver waits for a paused DB to wake up
+        for param, val in [("ConnectRetryCount", "3"), ("ConnectRetryInterval", "10")]:
+            if param.lower() not in azure_conn.lower():
+                azure_conn = azure_conn.rstrip(";") + f";{param}={val};"
         return f"mssql+pyodbc:///?odbc_connect={quote_plus(azure_conn)}"
 
     generic = os.environ.get("DATABASE_URL", "").strip()

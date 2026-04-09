@@ -19,7 +19,12 @@ class CleanURLHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(DIRECTORY), **kwargs)
 
     def do_GET(self):
-        path = self.path.split("?")[0].split("#")[0]
+        # Separate path from query string
+        if "?" in self.path:
+            path, qs = self.path.split("?", 1)
+        else:
+            path, qs = self.path, ""
+        path = path.split("#")[0]
 
         # If the path has no file extension, try appending .html
         if "." not in path.split("/")[-1] and path != "/":
@@ -27,8 +32,8 @@ class CleanURLHandler(SimpleHTTPRequestHandler):
             html_file = html_path.with_suffix(".html")
             if html_file.is_file():
                 self.path = path.rstrip("/") + ".html"
-                if "?" in self.requestline:
-                    self.path += "?" + self.requestline.split("?", 1)[1].split(" ")[0]
+                if qs:
+                    self.path += "?" + qs
 
         return super().do_GET()
 

@@ -60,22 +60,26 @@
     friends.forEach(function (f) {
       var li = document.createElement('li');
       li.className = 'friends-card';
+      var link = document.createElement('a');
+      link.className = 'friends-card-link';
+      link.href = 'user?id=' + f.id;
       if (f.profile_image_url) {
         var img = document.createElement('img');
         img.className = 'friends-card-img';
         img.alt = '';
         img.src = f.profile_image_url;
-        li.appendChild(img);
+        link.appendChild(img);
       } else {
         var initials = document.createElement('div');
         initials.className = 'friends-card-initials';
         initials.textContent = f.username.substring(0, 2).toUpperCase();
-        li.appendChild(initials);
+        link.appendChild(initials);
       }
       var name = document.createElement('span');
       name.className = 'friends-card-name';
       name.textContent = f.username;
-      li.appendChild(name);
+      link.appendChild(name);
+      li.appendChild(link);
       ul.appendChild(li);
     });
   }

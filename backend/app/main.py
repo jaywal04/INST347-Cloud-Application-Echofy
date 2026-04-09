@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request, session
 from flask_cors import CORS
 from flask_login import LoginManager
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.auth import auth_bp
 from app.friends import friends_bp
@@ -119,6 +120,12 @@ def create_app() -> Flask:
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(friends_bp)
+
+    @app.errorhandler(OperationalError)
+    @app.errorhandler(DBAPIError)
+    def handle_db_error(error):
+        app.logger.error("Database connection error: %s", error)
+        return jsonify(ok=False, errors=["Database is temporarily unavailable. Please try again in a moment."]), 503
 
     @app.get("/api/health")
     def health():

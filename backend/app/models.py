@@ -23,6 +23,7 @@ class PendingVerification(db.Model):
     username = db.Column(db.String(80), nullable=True)
     password_hash = db.Column(db.String(256), nullable=True)
     user_id = db.Column(db.Integer, nullable=True)  # for delete purpose
+    attempts = db.Column(db.Integer, default=0, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -75,6 +76,8 @@ class User(UserMixin, db.Model):
     profile_public = db.Column(db.Boolean, default=True, nullable=False)
     show_listening_history = db.Column(db.Boolean, default=True, nullable=False)
     show_reviews = db.Column(db.Boolean, default=True, nullable=False)
+    show_bio = db.Column(db.Boolean, default=True, nullable=False)
+    show_genre = db.Column(db.Boolean, default=True, nullable=False)
     profile_image_url = db.Column(db.String(2048), nullable=True)
 
     def set_password(self, password: str) -> None:

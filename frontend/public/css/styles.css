@@ -80,7 +80,7 @@ nav.ready {
   gap: 2.2rem;
   list-style: none;
   align-items: center;
-  padding-right: 5rem;
+  padding-right: 8rem;
 }
 
 .nav-links a {
@@ -1072,6 +1072,10 @@ footer a:hover { color: var(--accent); }
   margin-bottom: 2.5rem;
 }
 
+.profile-signout {
+  margin-left: auto;
+}
+
 .profile-avatar-large {
   width: 72px;
   height: 72px;
@@ -1520,4 +1524,48 @@ footer a:hover { color: var(--accent); }
 
 .friends-card-name {
   font-weight: 500;
+}
+
+.friends-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+}
+.friends-card-link:hover {
+  opacity: 0.85;
+}
+
+/* ---------- User (public) profile page ---------- */
+
+.user-profile-details {
+  max-width: 640px;
+  margin: 2rem auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.user-profile-field {
+  background: var(--navy-card);
+  border: 1px solid var(--navy-border);
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+}
+
+.user-profile-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+
+.user-profile-value {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text);
 }

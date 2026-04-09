@@ -20,6 +20,7 @@
         <h1 class="profile-username" id="profile-username">Loading...</h1>
         <p class="profile-meta" id="profile-meta"></p>
       </div>
+      <button class="btn-ghost profile-signout" id="btn-signout">Sign Out</button>
     </div>
 
     <!-- Tabs -->
@@ -115,6 +116,26 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+          <div class="privacy-row">
+            <div class="privacy-info">
+              <h3>Show Bio</h3>
+              <p>Display your bio when friends view your profile.</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="priv-bio" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="privacy-row">
+            <div class="privacy-info">
+              <h3>Show Favorite Genre</h3>
+              <p>Display your favorite genre when friends view your profile.</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="priv-genre" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
         <div id="privacy-msg" class="profile-msg" hidden></div>
         <button type="submit" class="btn-primary profile-save" id="btn-save-privacy">Save Privacy Settings</button>
@@ -175,7 +196,7 @@
   </footer>
 
   <script src="js/config.js"></script>
-  <script src="js/nav-auth.js" defer></script>
+
   <script src="js/profile.js" defer></script>
 </body>
 </html>

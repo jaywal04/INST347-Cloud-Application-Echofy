@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import random
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
@@ -22,10 +22,11 @@ auth_bp = Blueprint("auth", __name__)
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,30}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _MIN_PASSWORD_LEN = 8
+_MAX_VERIFY_ATTEMPTS = 5
 
 
 def _generate_code() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    return f"{secrets.randbelow(1000000):06d}"
 
 
 @auth_bp.post("/api/auth/signup")
@@ -99,7 +100,14 @@ def verify_signup():
         db.session.commit()
         return jsonify(ok=False, errors=["Verification code has expired. Please sign up again."]), 410
 
+    if pv.attempts >= _MAX_VERIFY_ATTEMPTS:
+        db.session.delete(pv)
+        db.session.commit()
+        return jsonify(ok=False, errors=["Too many incorrect attempts. Please sign up again."]), 429
+
     if pv.code != code:
+        pv.attempts = (pv.attempts or 0) + 1
+        db.session.commit()
         return jsonify(ok=False, errors=["Incorrect verification code."]), 400
 
     # Check again that email/username haven't been taken while waiting
@@ -128,16 +136,23 @@ def resend_code():
     if not email:
         return jsonify(ok=False, errors=["Email is required."]), 400
 
+    # For delete purpose, only the authenticated user can resend to their own email
+    if purpose == "delete":
+        if not current_user.is_authenticated or current_user.email != email:
+            return jsonify(ok=False, errors=["Unauthorized."]), 401
+
     pv = PendingVerification.query.filter_by(
         email=email, purpose=purpose
     ).order_by(PendingVerification.created_at.desc()).first()
 
     if not pv:
-        return jsonify(ok=False, errors=["No pending verification found."]), 404
+        # Don't reveal whether a pending verification exists
+        return jsonify(ok=True), 200
 
-    # Generate a new code and reset expiry
+    # Generate a new code and reset expiry, reset attempts
     code = _generate_code()
     pv.code = code
+    pv.attempts = 0
     pv.expires_at = datetime.now(timezone.utc) + timedelta(minutes=3)
     db.session.commit()
 
@@ -201,6 +216,8 @@ def get_profile():
         "profile_public": u.profile_public,
         "show_listening_history": u.show_listening_history,
         "show_reviews": u.show_reviews,
+        "show_bio": u.show_bio,
+        "show_genre": u.show_genre,
         "profile_image_url": u.profile_image_url,
     })
 
@@ -214,7 +231,10 @@ def update_profile():
     if "age" in data:
         age = data["age"]
         if age is not None:
-            age = int(age)
+            try:
+                age = int(age)
+            except (TypeError, ValueError):
+                return jsonify(ok=False, errors=["Age must be a number."]), 400
             if age < 13 or age > 120:
                 return jsonify(ok=False, errors=["Age must be between 13 and 120."]), 400
         u.age = age
@@ -290,6 +310,10 @@ def update_privacy():
         u.show_listening_history = bool(data["show_listening_history"])
     if "show_reviews" in data:
         u.show_reviews = bool(data["show_reviews"])
+    if "show_bio" in data:
+        u.show_bio = bool(data["show_bio"])
+    if "show_genre" in data:
+        u.show_genre = bool(data["show_genre"])
 
     db.session.commit()
     return jsonify(ok=True)
@@ -354,7 +378,14 @@ def delete_account():
         db.session.commit()
         return jsonify(ok=False, errors=["Verification code has expired. Please start over."]), 410
 
+    if pv.attempts >= _MAX_VERIFY_ATTEMPTS:
+        db.session.delete(pv)
+        db.session.commit()
+        return jsonify(ok=False, errors=["Too many incorrect attempts. Please start over."]), 429
+
     if pv.code != code:
+        pv.attempts = (pv.attempts or 0) + 1
+        db.session.commit()
         return jsonify(ok=False, errors=["Incorrect verification code."]), 400
 
     user = db.session.get(User, current_user.id)

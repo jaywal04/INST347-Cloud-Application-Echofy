@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>User Profile — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <div id="navbar"></div>
+  <script src="js/navbar.js"></script>
+
+  <div class="profile-page">
+    <div class="profile-header">
+      <div class="profile-avatar-large" id="user-avatar">??</div>
+      <div class="profile-header-info">
+        <h1 class="profile-username" id="user-username">Loading...</h1>
+        <p class="profile-meta" id="user-meta"></p>
+      </div>
+    </div>
+
+    <div class="user-profile-details" id="user-details" hidden>
+      <div class="user-profile-field" id="field-bio" hidden>
+        <h3 class="user-profile-label">Bio</h3>
+        <p class="user-profile-value" id="user-bio"></p>
+      </div>
+      <div class="user-profile-field" id="field-genre" hidden>
+        <h3 class="user-profile-label">Favorite Genre</h3>
+        <p class="user-profile-value" id="user-genre"></p>
+      </div>
+    </div>
+
+    <div id="user-error" class="profile-msg msg-error" hidden></div>
+  </div>
+
+  <footer>
+    <span>&copy; 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/user-profile.js" defer></script>
+</body>
+</html>

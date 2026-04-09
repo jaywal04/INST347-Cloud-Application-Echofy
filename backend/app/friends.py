@@ -53,6 +53,28 @@ def _user_summary(u: User) -> dict:
     }
 
 
+@friends_bp.get("/api/users/<int:user_id>/profile")
+@login_required
+def public_profile(user_id: int):
+    """Return a user's public profile, respecting their privacy settings."""
+    user = db.session.get(User, user_id)
+    if not user or not user.profile_public:
+        return jsonify(ok=False, errors=["User not found or profile is private."]), 404
+
+    profile = {
+        "id": user.id,
+        "username": user.username,
+        "profile_image_url": user.profile_image_url,
+    }
+
+    if user.show_bio:
+        profile["bio"] = user.bio
+    if user.show_genre:
+        profile["favorite_genre"] = user.favorite_genre
+
+    return jsonify(ok=True, profile=profile)
+
+
 @friends_bp.get("/api/users/search")
 @login_required
 def search_users():

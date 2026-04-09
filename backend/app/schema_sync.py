@@ -36,9 +36,9 @@ def _mssql_default_sql(col: Column) -> str | None:
     if col.nullable:
         return None
     name = col.name.lower()
-    if name == "accepted_terms":
+    if name in ("accepted_terms", "attempts"):
         return "0"
-    if name in ("profile_public", "show_listening_history", "show_reviews"):
+    if name in ("profile_public", "show_listening_history", "show_reviews", "show_bio", "show_genre"):
         return "1"
     if name == "created_at":
         return "SYSUTCDATETIME()"
@@ -83,9 +83,9 @@ def _sqlite_default_sql(col: Column) -> str | None:
     if col.nullable:
         return None
     name = col.name.lower()
-    if name == "accepted_terms":
+    if name in ("accepted_terms", "attempts"):
         return "0"
-    if name in ("profile_public", "show_listening_history", "show_reviews"):
+    if name in ("profile_public", "show_listening_history", "show_reviews", "show_bio", "show_genre"):
         return "1"
     if name == "created_at":
         return "CURRENT_TIMESTAMP"

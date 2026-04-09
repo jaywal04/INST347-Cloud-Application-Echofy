@@ -70,6 +70,8 @@
         document.getElementById('priv-public').checked = p.profile_public;
         document.getElementById('priv-history').checked = p.show_listening_history;
         document.getElementById('priv-reviews').checked = p.show_reviews;
+        document.getElementById('priv-bio').checked = p.show_bio !== false;
+        document.getElementById('priv-genre').checked = p.show_genre !== false;
       })
       .catch(function () {
         document.getElementById('profile-username').textContent = 'Error loading profile';
@@ -190,6 +192,8 @@
       profile_public: document.getElementById('priv-public').checked,
       show_listening_history: document.getElementById('priv-history').checked,
       show_reviews: document.getElementById('priv-reviews').checked,
+      show_bio: document.getElementById('priv-bio').checked,
+      show_genre: document.getElementById('priv-genre').checked,
     };
 
     fetch(API_BASE + '/api/auth/privacy', Object.assign({}, fetchOpts, {
@@ -212,6 +216,16 @@
         btn.disabled = false;
         btn.textContent = 'Save Privacy Settings';
       });
+  });
+
+  // --- Sign out ---
+  document.getElementById('btn-signout').addEventListener('click', function () {
+    var btn = document.getElementById('btn-signout');
+    btn.disabled = true;
+    btn.textContent = 'Signing out...';
+    fetch(API_BASE + '/api/auth/logout', Object.assign({}, fetchOpts, { method: 'POST' }))
+      .then(function () { window.location.href = '/'; })
+      .catch(function () { window.location.href = '/'; });
   });
 
   // --- Delete account (multi-step: password → email code → delete) ---

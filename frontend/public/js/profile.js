@@ -214,25 +214,131 @@
       });
   });
 
-  // --- Delete account ---
-  var deleteConfirm = document.getElementById('delete-confirm');
+  // --- Delete account (multi-step: password → email code → delete) ---
+  var deleteStepPassword = document.getElementById('delete-step-password');
+  var deleteStepCode = document.getElementById('delete-step-code');
+  var deleteCountdown = null;
+  var deleteEmail = '';
 
-  document.getElementById('btn-show-delete').addEventListener('click', function () {
-    deleteConfirm.hidden = false;
-  });
-
-  document.getElementById('btn-cancel-delete').addEventListener('click', function () {
-    deleteConfirm.hidden = true;
+  function resetDeleteFlow() {
+    if (deleteCountdown) clearInterval(deleteCountdown);
+    deleteStepPassword.hidden = true;
+    deleteStepCode.hidden = true;
     document.getElementById('delete-password').value = '';
+    document.getElementById('delete-code').value = '';
     document.getElementById('delete-msg').hidden = true;
+    document.getElementById('delete-code-msg').hidden = true;
+  }
+
+  function startDeleteCountdown() {
+    var remaining = 180;
+    var timerEl = document.getElementById('delete-timer-countdown');
+    var resendBtn = document.getElementById('btn-resend-delete-code');
+    if (resendBtn) resendBtn.disabled = true;
+
+    if (deleteCountdown) clearInterval(deleteCountdown);
+    deleteCountdown = setInterval(function () {
+      remaining--;
+      var m = Math.floor(remaining / 60);
+      var s = remaining % 60;
+      if (timerEl) timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      if (remaining <= 0) {
+        clearInterval(deleteCountdown);
+        if (timerEl) timerEl.textContent = 'expired';
+        if (resendBtn) resendBtn.disabled = false;
+      }
+    }, 1000);
+  }
+
+  // Show password step
+  document.getElementById('btn-show-delete').addEventListener('click', function () {
+    resetDeleteFlow();
+    deleteStepPassword.hidden = false;
   });
 
-  document.getElementById('btn-confirm-delete').addEventListener('click', function () {
+  // Cancel from password step
+  document.getElementById('btn-cancel-delete').addEventListener('click', function () {
+    resetDeleteFlow();
+  });
+
+  // Cancel from code step
+  document.getElementById('btn-cancel-delete-code').addEventListener('click', function () {
+    resetDeleteFlow();
+  });
+
+  // Step 1: Submit password → send code
+  document.getElementById('btn-send-delete-code').addEventListener('click', function () {
     var password = document.getElementById('delete-password').value;
     var msgEl = document.getElementById('delete-msg');
 
     if (!password) {
       showMsg(msgEl, 'Please enter your password.', true);
+      return;
+    }
+
+    var btn = document.getElementById('btn-send-delete-code');
+    btn.disabled = true;
+    btn.textContent = 'Sending code...';
+
+    fetch(API_BASE + '/api/auth/delete-request', Object.assign({}, fetchOpts, {
+      method: 'POST',
+      body: JSON.stringify({ password: password }),
+    }))
+      .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (ref) {
+        if (!ref.ok) {
+          showMsg(msgEl, (ref.data.errors || ['Failed.']).join(' '), true);
+          return;
+        }
+        // Move to code step
+        deleteEmail = ref.data.email || '';
+        deleteStepPassword.hidden = true;
+        deleteStepCode.hidden = false;
+        document.getElementById('delete-email-display').textContent = deleteEmail;
+        startDeleteCountdown();
+      })
+      .catch(function () {
+        showMsg(msgEl, 'Network error.', true);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Send Verification Code';
+      });
+  });
+
+  // Resend delete code
+  document.getElementById('btn-resend-delete-code').addEventListener('click', function () {
+    var btn = document.getElementById('btn-resend-delete-code');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    fetch(API_BASE + '/api/auth/resend-code', Object.assign({}, fetchOpts, {
+      method: 'POST',
+      body: JSON.stringify({ email: deleteEmail, purpose: 'delete' }),
+    }))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          startDeleteCountdown();
+        } else {
+          showMsg(document.getElementById('delete-code-msg'), (data.errors || ['Could not resend.']).join(' '), true);
+        }
+      })
+      .catch(function () {
+        showMsg(document.getElementById('delete-code-msg'), 'Network error.', true);
+      })
+      .finally(function () {
+        btn.textContent = 'Resend Code';
+      });
+  });
+
+  // Step 2: Submit code → delete account
+  document.getElementById('btn-confirm-delete').addEventListener('click', function () {
+    var code = (document.getElementById('delete-code').value || '').trim();
+    var msgEl = document.getElementById('delete-code-msg');
+
+    if (!code || code.length !== 6) {
+      showMsg(msgEl, 'Please enter the 6-digit code.', true);
       return;
     }
 
@@ -242,14 +348,14 @@
 
     fetch(API_BASE + '/api/auth/account', Object.assign({}, fetchOpts, {
       method: 'DELETE',
-      body: JSON.stringify({ password: password }),
+      body: JSON.stringify({ code: code }),
     }))
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data.ok) {
+      .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (ref) {
+        if (ref.ok) {
           window.location.href = '/';
         } else {
-          showMsg(msgEl, (data.errors || ['Failed to delete account.']).join(' '), true);
+          showMsg(msgEl, (ref.data.errors || ['Failed to delete account.']).join(' '), true);
         }
       })
       .catch(function () {

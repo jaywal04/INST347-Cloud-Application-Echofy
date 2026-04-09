@@ -82,6 +82,53 @@
 
   // ─── Signup form ───
   var signupForm = document.getElementById('signup-form');
+  var verifyCard = document.getElementById('verify-card');
+  var signupCard = signupForm ? signupForm.closest('.auth-card') : null;
+  var pendingEmail = '';
+  var countdownInterval = null;
+
+  function startCountdown() {
+    var remaining = 180; // 3 minutes
+    var timerEl = document.getElementById('timer-countdown');
+    var resendBtn = document.getElementById('btn-resend-code');
+    if (resendBtn) resendBtn.disabled = true;
+
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(function () {
+      remaining--;
+      var m = Math.floor(remaining / 60);
+      var s = remaining % 60;
+      if (timerEl) timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      if (remaining <= 0) {
+        clearInterval(countdownInterval);
+        if (timerEl) timerEl.textContent = 'expired';
+        if (resendBtn) resendBtn.disabled = false;
+      }
+    }, 1000);
+  }
+
+  function showVerifyStep(email) {
+    pendingEmail = email;
+    if (signupCard) signupCard.hidden = true;
+    if (verifyCard) {
+      verifyCard.hidden = false;
+      document.getElementById('verify-email-display').textContent = email;
+      document.getElementById('verify-code').value = '';
+      var verifyError = document.getElementById('verify-error');
+      if (verifyError) { verifyError.hidden = true; verifyError.innerHTML = ''; }
+    }
+    startCountdown();
+  }
+
+  function showVerifyError(messages) {
+    var el = document.getElementById('verify-error');
+    if (!el) return;
+    el.hidden = false;
+    el.innerHTML = (Array.isArray(messages) ? messages : [messages])
+      .map(function (m) { return '<div>' + m + '</div>'; })
+      .join('');
+  }
+
   if (signupForm) {
     signupForm.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -105,7 +152,7 @@
 
       var btn = document.getElementById('btn-signup');
       btn.disabled = true;
-      btn.textContent = 'Creating account...';
+      btn.textContent = 'Sending code...';
 
       fetch(API_BASE + '/api/auth/signup', Object.assign({}, fetchOpts, {
         method: 'POST',
@@ -125,8 +172,8 @@
             showError(ref.data.errors || ['Something went wrong.']);
             return;
           }
-          // Success — redirect to discover page
-          window.location.href = 'discover';
+          // Show verification step
+          showVerifyStep(ref.data.email || email);
         })
         .catch(function () {
           showError('Network error. Is the backend running on http://127.0.0.1:5001?');
@@ -135,6 +182,87 @@
           btn.disabled = false;
           btn.textContent = 'Create Account';
         });
+    });
+  }
+
+  // ─── Verify code form ───
+  var verifyForm = document.getElementById('verify-form');
+  if (verifyForm) {
+    verifyForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var code = (document.getElementById('verify-code').value || '').trim();
+      var verifyError = document.getElementById('verify-error');
+      if (verifyError) { verifyError.hidden = true; }
+
+      if (!code || code.length !== 6) {
+        showVerifyError('Please enter the 6-digit code.');
+        return;
+      }
+
+      var btn = document.getElementById('btn-verify');
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+
+      fetch(API_BASE + '/api/auth/verify-signup', Object.assign({}, fetchOpts, {
+        method: 'POST',
+        body: JSON.stringify({ email: pendingEmail, code: code }),
+      }))
+        .then(function (res) {
+          return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+        })
+        .then(function (ref) {
+          if (!ref.ok) {
+            showVerifyError(ref.data.errors || ['Verification failed.']);
+            return;
+          }
+          // Success — account created, redirect to discover
+          window.location.href = 'discover';
+        })
+        .catch(function () {
+          showVerifyError('Network error.');
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Verify & Create Account';
+        });
+    });
+  }
+
+  // ─── Resend code ───
+  var resendBtn = document.getElementById('btn-resend-code');
+  if (resendBtn) {
+    resendBtn.addEventListener('click', function () {
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending...';
+
+      fetch(API_BASE + '/api/auth/resend-code', Object.assign({}, fetchOpts, {
+        method: 'POST',
+        body: JSON.stringify({ email: pendingEmail, purpose: 'signup' }),
+      }))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.ok) {
+            startCountdown();
+          } else {
+            showVerifyError(data.errors || ['Could not resend code.']);
+          }
+        })
+        .catch(function () {
+          showVerifyError('Network error.');
+        })
+        .finally(function () {
+          resendBtn.textContent = 'Resend Code';
+        });
+    });
+  }
+
+  // ─── Back to signup ───
+  var backBtn = document.getElementById('btn-back-signup');
+  if (backBtn) {
+    backBtn.addEventListener('click', function () {
+      if (countdownInterval) clearInterval(countdownInterval);
+      if (verifyCard) verifyCard.hidden = true;
+      if (signupCard) signupCard.hidden = false;
     });
   }
 

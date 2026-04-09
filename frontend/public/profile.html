@@ -133,15 +133,30 @@
           <button class="btn-danger" id="btn-show-delete">Delete Account</button>
         </div>
 
-        <!-- Delete confirmation (hidden by default) -->
-        <div class="delete-confirm" id="delete-confirm" hidden>
-          <p class="delete-warning">To confirm, please enter your password:</p>
+        <!-- Step 1: Password confirmation -->
+        <div class="delete-confirm" id="delete-step-password" hidden>
+          <p class="delete-warning">To confirm, please enter your password. We will send a verification code to your email.</p>
           <div class="form-group">
             <input type="password" id="delete-password" placeholder="Enter your password" />
           </div>
           <div id="delete-msg" class="profile-msg" hidden></div>
           <div class="delete-actions">
             <button class="btn-ghost" id="btn-cancel-delete">Cancel</button>
+            <button class="btn-danger" id="btn-send-delete-code">Send Verification Code</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Email verification code -->
+        <div class="delete-confirm" id="delete-step-code" hidden>
+          <p class="delete-warning">Enter the 6-digit code sent to <strong id="delete-email-display"></strong></p>
+          <div class="form-group">
+            <input type="text" id="delete-code" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+          </div>
+          <p class="verify-timer" id="delete-timer">Code expires in <strong id="delete-timer-countdown">3:00</strong></p>
+          <div id="delete-code-msg" class="profile-msg" hidden></div>
+          <div class="delete-actions">
+            <button class="btn-ghost" id="btn-cancel-delete-code">Cancel</button>
+            <button class="btn-ghost" id="btn-resend-delete-code" disabled>Resend Code</button>
             <button class="btn-danger" id="btn-confirm-delete">Permanently Delete</button>
           </div>
         </div>

@@ -2,21 +2,30 @@
 
 from __future__ import annotations
 
+import random
 import re
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import or_
 
+from werkzeug.security import generate_password_hash
+
 from app.blob_storage import delete_blob_by_url, upload_profile_image
 from app.database import db
-from app.models import FriendRequest, User
+from app.email_service import send_verification_code
+from app.models import FriendRequest, PendingVerification, User
 
 auth_bp = Blueprint("auth", __name__)
 
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,30}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _MIN_PASSWORD_LEN = 8
+
+
+def _generate_code() -> str:
+    return f"{random.randint(0, 999999):06d}"
 
 
 @auth_bp.post("/api/auth/signup")
@@ -47,13 +56,95 @@ def signup():
     if User.query.filter((User.email == email) | (User.username == username)).first():
         return jsonify(ok=False, errors=["Email or username is already taken."]), 409
 
-    user = User(username=username, email=email, accepted_terms=True)
-    user.set_password(password)
+    # Clean up any old pending verifications for this email
+    PendingVerification.query.filter_by(email=email, purpose="signup").delete()
+    db.session.commit()
+
+    code = _generate_code()
+    pv = PendingVerification(
+        email=email,
+        code=code,
+        purpose="signup",
+        username=username,
+        password_hash=generate_password_hash(password),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=3),
+    )
+    db.session.add(pv)
+    db.session.commit()
+
+    if not send_verification_code(email, code, purpose="signup"):
+        return jsonify(ok=False, errors=["Failed to send verification email. Please try again."]), 503
+
+    return jsonify(ok=True, verify=True, email=email), 200
+
+
+@auth_bp.post("/api/auth/verify-signup")
+def verify_signup():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+
+    if not email or not code:
+        return jsonify(ok=False, errors=["Email and verification code are required."]), 400
+
+    pv = PendingVerification.query.filter_by(
+        email=email, purpose="signup"
+    ).order_by(PendingVerification.created_at.desc()).first()
+
+    if not pv:
+        return jsonify(ok=False, errors=["No pending verification found. Please sign up again."]), 404
+
+    if pv.is_expired():
+        db.session.delete(pv)
+        db.session.commit()
+        return jsonify(ok=False, errors=["Verification code has expired. Please sign up again."]), 410
+
+    if pv.code != code:
+        return jsonify(ok=False, errors=["Incorrect verification code."]), 400
+
+    # Check again that email/username haven't been taken while waiting
+    if User.query.filter((User.email == email) | (User.username == pv.username)).first():
+        db.session.delete(pv)
+        db.session.commit()
+        return jsonify(ok=False, errors=["Email or username is already taken."]), 409
+
+    # Create the user
+    user = User(username=pv.username, email=email, accepted_terms=True)
+    user.password_hash = pv.password_hash
     db.session.add(user)
+    db.session.delete(pv)
     db.session.commit()
 
     login_user(user)
     return jsonify(ok=True, user={"id": user.id, "username": user.username}), 201
+
+
+@auth_bp.post("/api/auth/resend-code")
+def resend_code():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    purpose = data.get("purpose") or "signup"
+
+    if not email:
+        return jsonify(ok=False, errors=["Email is required."]), 400
+
+    pv = PendingVerification.query.filter_by(
+        email=email, purpose=purpose
+    ).order_by(PendingVerification.created_at.desc()).first()
+
+    if not pv:
+        return jsonify(ok=False, errors=["No pending verification found."]), 404
+
+    # Generate a new code and reset expiry
+    code = _generate_code()
+    pv.code = code
+    pv.expires_at = datetime.now(timezone.utc) + timedelta(minutes=3)
+    db.session.commit()
+
+    if not send_verification_code(email, code, purpose=purpose):
+        return jsonify(ok=False, errors=["Failed to send email. Please try again."]), 503
+
+    return jsonify(ok=True), 200
 
 
 @auth_bp.post("/api/auth/login")
@@ -204,23 +295,74 @@ def update_privacy():
     return jsonify(ok=True)
 
 
-@auth_bp.delete("/api/auth/account")
+@auth_bp.post("/api/auth/delete-request")
 @login_required
-def delete_account():
+def delete_request():
+    """Step 1: Verify password, then send a deletion verification code to email."""
     data = request.get_json(silent=True) or {}
     password = data.get("password") or ""
 
     if not password:
-        return jsonify(ok=False, errors=["Password is required to delete your account."]), 400
+        return jsonify(ok=False, errors=["Password is required."]), 400
 
     if not current_user.check_password(password):
         return jsonify(ok=False, errors=["Incorrect password."]), 401
+
+    email = current_user.email
+
+    # Clean up old delete verifications for this user
+    PendingVerification.query.filter_by(email=email, purpose="delete").delete()
+    db.session.commit()
+
+    code = _generate_code()
+    pv = PendingVerification(
+        email=email,
+        code=code,
+        purpose="delete",
+        user_id=current_user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=3),
+    )
+    db.session.add(pv)
+    db.session.commit()
+
+    if not send_verification_code(email, code, purpose="delete"):
+        return jsonify(ok=False, errors=["Failed to send verification email."]), 503
+
+    return jsonify(ok=True, email=email), 200
+
+
+@auth_bp.delete("/api/auth/account")
+@login_required
+def delete_account():
+    """Step 2: Verify the 6-digit code and permanently delete the account."""
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
+
+    if not code:
+        return jsonify(ok=False, errors=["Verification code is required."]), 400
+
+    email = current_user.email
+    pv = PendingVerification.query.filter_by(
+        email=email, purpose="delete"
+    ).order_by(PendingVerification.created_at.desc()).first()
+
+    if not pv:
+        return jsonify(ok=False, errors=["No pending deletion request. Please start over."]), 404
+
+    if pv.is_expired():
+        db.session.delete(pv)
+        db.session.commit()
+        return jsonify(ok=False, errors=["Verification code has expired. Please start over."]), 410
+
+    if pv.code != code:
+        return jsonify(ok=False, errors=["Incorrect verification code."]), 400
 
     user = db.session.get(User, current_user.id)
     delete_blob_by_url(user.profile_image_url if user else None)
     FriendRequest.query.filter(
         or_(FriendRequest.from_user_id == user.id, FriendRequest.to_user_id == user.id)
     ).delete(synchronize_session=False)
+    db.session.delete(pv)
     logout_user()
     db.session.delete(user)
     db.session.commit()

@@ -7,7 +7,7 @@ Root /  →  serves public/index.html
 
 import os
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 PORT = int(os.environ.get("PORT", "3001"))
@@ -34,7 +34,7 @@ class CleanURLHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("", PORT), CleanURLHandler)
+    server = ThreadingHTTPServer(("", PORT), CleanURLHandler)
     print(f"Frontend at http://localhost:{PORT}/")
     print("Press Ctrl+C to stop.")
     try:

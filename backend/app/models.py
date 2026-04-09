@@ -10,6 +10,30 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app.database import db
 
 
+class PendingVerification(db.Model):
+    """Stores 6-digit verification codes for signup and account deletion."""
+
+    __tablename__ = "pending_verifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False, index=True)
+    code = db.Column(db.String(6), nullable=False)
+    purpose = db.Column(db.String(20), nullable=False, default="signup")  # signup | delete
+    # For signup: store the registration payload so we can create the user on verify
+    username = db.Column(db.String(80), nullable=True)
+    password_hash = db.Column(db.String(256), nullable=True)
+    user_id = db.Column(db.Integer, nullable=True)  # for delete purpose
+    expires_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def is_expired(self) -> bool:
+        now = datetime.now(timezone.utc)
+        exp = self.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return now > exp
+
+
 class FriendRequest(db.Model):
     """Directed friend request: from_user → to_user. When accepted, the row stays as status accepted."""
 

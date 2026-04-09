@@ -60,6 +60,30 @@
 
       <p class="auth-switch">Already have an account? <a href="login" class="auth-link">Sign in</a></p>
     </div>
+
+    <!-- Email verification step (hidden by default) -->
+    <div class="auth-card verify-card" id="verify-card" hidden>
+      <h1 class="auth-title">Check your email</h1>
+      <p class="auth-subtitle">We sent a 6-digit code to <strong id="verify-email-display"></strong></p>
+
+      <div id="verify-error" class="auth-error" hidden></div>
+
+      <form id="verify-form" novalidate>
+        <div class="form-group">
+          <label for="verify-code">Verification Code</label>
+          <input type="text" id="verify-code" name="code" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" required />
+        </div>
+
+        <button type="submit" class="btn-primary auth-submit" id="btn-verify">Verify &amp; Create Account</button>
+      </form>
+
+      <p class="verify-timer" id="verify-timer">Code expires in <strong id="timer-countdown">3:00</strong></p>
+
+      <div class="verify-actions">
+        <button type="button" class="btn-ghost btn-sm" id="btn-resend-code" disabled>Resend Code</button>
+        <button type="button" class="btn-ghost btn-sm" id="btn-back-signup">Back to Sign Up</button>
+      </div>
+    </div>
   </div>
 
   <!-- FOOTER -->

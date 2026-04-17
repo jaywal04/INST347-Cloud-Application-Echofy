@@ -15,7 +15,11 @@ from app.friends import friends_bp
 from app.database import init_db
 from app.envutil import first_non_empty
 from app.models import User
-from app.spotify_client import SPOTIFY_TOKEN_URL, fetch_top_tracks_for_response
+from app.spotify_client import (
+    SPOTIFY_TOKEN_URL,
+    fetch_top_tracks_for_response,
+    search_spotify_for_response,
+)
 
 PORT = int(os.environ.get("PORT", "5001"))
 
@@ -152,6 +156,19 @@ def create_app() -> Flask:
             client_secret=_spotify_client_secret(),
             legacy_user_token=_spotify_legacy_user_token(),
             oauth_access_token=oauth_tok,
+        )
+        return jsonify(payload), status
+
+    @app.get("/api/spotify/search")
+    def spotify_search():
+        oauth_tok = session.get("spotify_access_token") or ""
+        payload, status = search_spotify_for_response(
+            client_id=_spotify_client_id(),
+            client_secret=_spotify_client_secret(),
+            legacy_user_token=_spotify_legacy_user_token(),
+            oauth_access_token=oauth_tok,
+            query=request.args.get("q", ""),
+            item_type=request.args.get("type", "track"),
         )
         return jsonify(payload), status
 

@@ -36,6 +36,7 @@ def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
     image_url = next((img.get("url") for img in images if img.get("url")), None)
     artists = [a.get("name", "") for a in item.get("artists") or [] if a.get("name")]
     return {
+        "type": "track",
         "name": item.get("name") or "Unknown track",
         "artists": artists,
         "album": album.get("name") or "",
@@ -51,12 +52,63 @@ def _normalize_new_release_album(album: dict[str, Any]) -> dict[str, Any] | None
     image_url = next((img.get("url") for img in images if img.get("url")), None)
     artists = [a.get("name", "") for a in album.get("artists") or [] if a.get("name")]
     return {
+        "type": "album",
         "name": album.get("name") or "Album",
         "artists": artists,
         "album": "New release",
         "image": image_url,
         "url": (album.get("external_urls") or {}).get("spotify"),
     }
+
+
+def _normalize_album(item: dict[str, Any]) -> dict[str, Any] | None:
+    if not item:
+        return None
+    images = item.get("images") or []
+    image_url = next((img.get("url") for img in images if img.get("url")), None)
+    artists = [a.get("name", "") for a in item.get("artists") or [] if a.get("name")]
+    release_year = (item.get("release_date") or "")[:4]
+    album_type = (item.get("album_type") or "album").title()
+    if release_year:
+        album_type = f"{album_type} · {release_year}"
+    return {
+        "type": "album",
+        "name": item.get("name") or "Album",
+        "artists": artists,
+        "album": album_type,
+        "image": image_url,
+        "url": (item.get("external_urls") or {}).get("spotify"),
+    }
+
+
+def _normalize_artist(item: dict[str, Any]) -> dict[str, Any] | None:
+    if not item:
+        return None
+    images = item.get("images") or []
+    image_url = next((img.get("url") for img in images if img.get("url")), None)
+    genres = item.get("genres") or []
+    followers = (item.get("followers") or {}).get("total")
+    detail = ", ".join(genres[:2]) if genres else "Artist"
+    if followers:
+        detail = f"{detail} · {followers:,} followers"
+    return {
+        "type": "artist",
+        "name": item.get("name") or "Artist",
+        "artists": [],
+        "album": detail,
+        "image": image_url,
+        "url": (item.get("external_urls") or {}).get("spotify"),
+    }
+
+
+def _normalize_search_item(item: dict[str, Any], item_type: str) -> dict[str, Any] | None:
+    if item_type == "track":
+        return _normalize_track(item)
+    if item_type == "album":
+        return _normalize_album(item)
+    if item_type == "artist":
+        return _normalize_artist(item)
+    return None
 
 
 def _playlist_tracks_payload(
@@ -291,4 +343,95 @@ def fetch_top_tracks_for_response(
             ),
         },
         503,
+    )
+
+
+def search_spotify_for_response(
+    client_id: str = "",
+    client_secret: str = "",
+    legacy_user_token: str = "",
+    oauth_access_token: str = "",
+    query: str = "",
+    item_type: str = "track",
+) -> tuple[dict[str, Any], int]:
+    q = (query or "").strip()
+    kind = (item_type or "track").strip().lower()
+    if len(q) < 2:
+        return (
+            {
+                "error": "invalid_query",
+                "message": "Search for at least 2 characters.",
+            },
+            400,
+        )
+    if kind not in {"track", "album", "artist"}:
+        return (
+            {
+                "error": "invalid_type",
+                "message": "Search type must be track, album, or artist.",
+            },
+            400,
+        )
+
+    cid, csec = client_id.strip(), client_secret.strip()
+    token = (oauth_access_token or legacy_user_token or "").strip()
+    if cid and csec:
+        token, err = _get_client_credentials_token(cid, csec)
+        if not token:
+            return (
+                {
+                    "error": "token_error",
+                    "message": err or "Could not obtain Spotify access token.",
+                },
+                502,
+            )
+    elif not token:
+        return (
+            {
+                "error": "missing_credentials",
+                "message": "Connect Spotify or set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the backend.",
+            },
+            503,
+        )
+
+    params: dict[str, Any] = {"q": q, "type": kind, "limit": 20}
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
+    if kind in {"track", "album"} and market:
+        params["market"] = market
+
+    res = requests.get(
+        f"{SPOTIFY_API}/search",
+        headers=_headers(token),
+        params=params,
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if res.status_code != 200:
+        try:
+            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+        except Exception:
+            detail = res.text[:200]
+        return (
+            {
+                "error": "spotify_search_error",
+                "message": "Could not search Spotify.",
+                "detail": detail,
+            },
+            502,
+        )
+
+    bucket = res.json().get(f"{kind}s") or {}
+    items = []
+    for raw in bucket.get("items") or []:
+        item = _normalize_search_item(raw, kind)
+        if item:
+            items.append(item)
+
+    return (
+        {
+            "source": "spotify_search",
+            "query": q,
+            "type": kind,
+            "items": items,
+        },
+        200,
     )

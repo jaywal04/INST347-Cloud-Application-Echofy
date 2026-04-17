@@ -123,7 +123,7 @@ nav.ready {
   z-index: 0;
   background:
     radial-gradient(ellipse 60% 50% at 70% 40%, rgba(74,127,212,0.12) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 40% at 20% 70%, rgba(201,168,76,0.06) 0%, transparent 60%);
+    radial-gradient(ellippse 4% 40% at 20% 70%, rgba(201,168,76,0.06) 0%, transparent 60%);
 }
 
 .hero-content {
@@ -661,6 +661,35 @@ footer a:hover { color: var(--accent); }
   min-height: 1.2em;
 }
 
+.discover-divider {
+  border-top: 1px solid var(--navy-border);
+  margin: 1.75rem 0;
+}
+
+.discover-filter-row,
+.discover-actions-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.discover-filter-row .is-active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.discover-search-form {
+  margin: 0;
+}
+
+.discover-search-wrap {
+  max-width: none;
+  width: 100%;
+  background: var(--navy-deep);
+}
+
 .spotify-results {
   margin-top: 1.5rem;
   padding-top: 1.25rem;
@@ -685,6 +714,7 @@ footer a:hover { color: var(--accent); }
 .spotify-track {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.85rem;
   padding: 0.5rem 0.35rem;
   border-radius: 3px;
@@ -749,6 +779,67 @@ footer a:hover { color: var(--accent); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.spotify-track-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.spotify-track-actions a {
+  text-decoration: none;
+}
+
+.spotify-review-summary {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--accent);
+  line-height: 1.45;
+}
+
+.spotify-review-form {
+  width: 100%;
+  margin-left: 4.85rem;
+  padding: 0.85rem;
+  background: var(--navy-deep);
+  border: 1px solid var(--navy-border);
+  border-radius: 4px;
+}
+
+.spotify-review-form label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.spotify-review-form select,
+.spotify-review-form textarea {
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--navy-border);
+  border-radius: 4px;
+  background: var(--navy-card);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+}
+
+.spotify-review-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.spotify-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 /* ========== AUTH PAGES ========== */

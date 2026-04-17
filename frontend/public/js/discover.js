@@ -3,7 +3,6 @@
 
   var API_BASE = window.ECHOFY_API_BASE || '';
   var STORAGE_KEY = 'echofy-discover-shortlist';
-  var REVIEW_STORAGE_KEY = 'echofy-discover-reviews';
 
   var btn = document.getElementById('btn-spotify-top');
   var statusEl = document.getElementById('spotify-status');
@@ -26,7 +25,7 @@
   var currentItems = [];
   var itemCache = {};
   var shortlist = loadShortlist();
-  var reviews = loadReviews();
+  var reviews = {};
 
   if (!btn || !statusEl || !resultsEl) return;
 
@@ -64,18 +63,6 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(shortlist.slice(0, 20)));
   }
 
-  function loadReviews() {
-    try {
-      return JSON.parse(localStorage.getItem(REVIEW_STORAGE_KEY) || '{}');
-    } catch (error) {
-      return {};
-    }
-  }
-
-  function saveReviews() {
-    localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviews));
-  }
-
   function itemKey(item) {
     return [
       item.type || 'track',
@@ -88,6 +75,53 @@
 
   function reviewFor(item) {
     return reviews[itemKey(item)];
+  }
+
+  function loadReviewsFromBackend() {
+    if (!API_BASE) return;
+
+    fetch(API_BASE + '/api/reviews', fetchOpts)
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      })
+      .then(function (_ref) {
+        if (!_ref.ok) return;
+        reviews = {};
+        (_ref.data.reviews || []).forEach(function (review) {
+          if (review.item_key) reviews[review.item_key] = review;
+        });
+        refreshReviewSummaries();
+      })
+      .catch(function (err) {
+        console.error('[Echofy] /api/reviews fetch failed', err);
+      });
+  }
+
+  function saveReviewToBackend(item, rating, text) {
+    if (!API_BASE) {
+      return Promise.resolve({
+        ok: false,
+        data: { errors: ['API base URL is not configured for this host.'] },
+      });
+    }
+
+    return fetch(API_BASE + '/api/reviews', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_key: itemKey(item),
+        item: item,
+        rating: rating,
+        text: text,
+      }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok, status: res.status, data: data };
+      });
+    });
   }
 
   function rememberItems(items) {
@@ -305,16 +339,33 @@
 
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      reviews[itemKey(item)] = {
-        rating: Number(rating.value),
-        text: text.value.trim(),
-        item: item,
-        updated_at: new Date().toISOString(),
-      };
-      saveReviews();
-      updateReviewSummary(row, item);
-      form.remove();
-      if (surpriseStatusEl) surpriseStatusEl.textContent = 'Review saved on this browser.';
+      save.disabled = true;
+      save.textContent = 'Saving...';
+
+      saveReviewToBackend(item, Number(rating.value), text.value.trim())
+        .then(function (_ref) {
+          if (!_ref.ok) {
+            var message =
+              _ref.status === 401
+                ? 'Sign in before saving reviews so they can be stored in your account.'
+                : apiErrorText(_ref.data, 'Could not save review.');
+            if (surpriseStatusEl) surpriseStatusEl.textContent = message;
+            return;
+          }
+
+          reviews[itemKey(item)] = _ref.data.review;
+          updateReviewSummary(row, item);
+          form.remove();
+          if (surpriseStatusEl) surpriseStatusEl.textContent = 'Review saved to your account.';
+        })
+        .catch(function (err) {
+          console.error('[Echofy] /api/reviews save failed', err);
+          if (surpriseStatusEl) surpriseStatusEl.textContent = 'Network error while saving review.';
+        })
+        .finally(function () {
+          save.disabled = false;
+          save.textContent = 'Save review';
+        });
     });
 
     row.appendChild(form);
@@ -331,6 +382,15 @@
 
     var reviewBtn = row.querySelector('[data-review-item]');
     if (reviewBtn) reviewBtn.textContent = review ? 'Edit review' : 'Rate / Review';
+  }
+
+  function refreshReviewSummaries() {
+    document.querySelectorAll('[data-review-item]').forEach(function (button) {
+      var key = button.getAttribute('data-review-item');
+      var item = itemCache[key];
+      var row = button.closest('.spotify-track');
+      if (item && row) updateReviewSummary(row, item);
+    });
   }
 
   function renderItems(container, label, items, options) {
@@ -579,4 +639,5 @@
   });
 
   renderShortlist();
+  loadReviewsFromBackend();
 })();

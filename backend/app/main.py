@@ -15,6 +15,7 @@ from app.friends import friends_bp
 from app.database import init_db
 from app.envutil import first_non_empty
 from app.models import User
+from app.reviews import reviews_bp
 from app.spotify_client import (
     SPOTIFY_TOKEN_URL,
     fetch_top_tracks_for_response,
@@ -124,6 +125,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(friends_bp)
+    app.register_blueprint(reviews_bp)
 
     @app.errorhandler(OperationalError)
     @app.errorhandler(DBAPIError)

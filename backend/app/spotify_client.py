@@ -57,6 +57,25 @@ _GENRE_SEEDS = (
     "techno",
     "trap",
 )
+_POPULAR_GENRE_ARTISTS = {
+    "rap": ["Drake", "Kendrick Lamar", "J. Cole", "Future", "Lil Baby", "21 Savage"],
+    "hip-hop": ["Drake", "Kendrick Lamar", "Travis Scott", "Tyler, The Creator", "J. Cole"],
+    "trap": ["Future", "Young Thug", "Lil Baby", "Gunna", "21 Savage"],
+    "pop": ["Taylor Swift", "Dua Lipa", "The Weeknd", "Ariana Grande", "Olivia Rodrigo"],
+    "rock": ["Foo Fighters", "Arctic Monkeys", "Red Hot Chili Peppers", "The Killers"],
+    "country": ["Morgan Wallen", "Luke Combs", "Zach Bryan", "Chris Stapleton"],
+    "house": ["Fred again..", "FISHER", "John Summit", "Chris Lake", "MK"],
+    "afrobeat": ["Burna Boy", "Wizkid", "Rema", "Asake", "Tems"],
+    "r-n-b": ["SZA", "Summer Walker", "Brent Faiyaz", "PARTYNEXTDOOR", "H.E.R."],
+    "reggaeton": ["Bad Bunny", "Feid", "J Balvin", "Karol G", "Rauw Alejandro"],
+    "latin": ["Bad Bunny", "Peso Pluma", "Karol G", "Rauw Alejandro", "J Balvin"],
+    "indie": ["Phoebe Bridgers", "The 1975", "beabadoobee", "Clairo", "Mitski"],
+    "electronic": ["Fred again..", "Skrillex", "Disclosure", "Kaytranada", "Jamie xx"],
+    "edm": ["Martin Garrix", "Avicii", "Calvin Harris", "Zedd", "David Guetta"],
+    "techno": ["Charlotte de Witte", "Amelie Lens", "Adam Beyer", "Boris Brejcha"],
+    "drill": ["Pop Smoke", "Lil Durk", "Central Cee", "Headie One"],
+    "k-pop": ["BTS", "BLACKPINK", "NewJeans", "Stray Kids", "TWICE"],
+}
 
 _cc_lock = threading.Lock()
 _cc_access_token: str | None = None
@@ -572,31 +591,19 @@ def recommend_tracks_for_genre_response(
     market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
     headers = _headers(token)
 
+    artist_names = list(_POPULAR_GENRE_ARTISTS.get(seed, []))
+
     artist_search = requests.get(
         f"{SPOTIFY_API}/search",
         headers=headers,
         params={"q": f"genre:{seed}", "type": "artist", "limit": 5},
         timeout=_REQUEST_TIMEOUT,
     )
-    if artist_search.status_code != 200:
-        try:
-            detail = artist_search.json().get("error", {}).get("message", "") or artist_search.text[:200]
-        except Exception:
-            detail = artist_search.text[:200]
-        return (
-            {
-                "error": "spotify_recommendation_error",
-                "message": "Could not load Spotify recommendations for that genre.",
-                "detail": detail,
-            },
-            502,
-        )
-
-    artist_names = []
-    for artist in (artist_search.json().get("artists") or {}).get("items") or []:
-        name = str(artist.get("name") or "").strip()
-        if name and name.lower() not in [existing.lower() for existing in artist_names]:
-            artist_names.append(name)
+    if artist_search.status_code == 200:
+        for artist in (artist_search.json().get("artists") or {}).get("items") or []:
+            name = str(artist.get("name") or "").strip()
+            if name and name.lower() not in [existing.lower() for existing in artist_names]:
+                artist_names.append(name)
 
     items = []
     seen_urls = set()

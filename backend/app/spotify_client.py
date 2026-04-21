@@ -17,6 +17,7 @@ GLOBAL_TOP_50_PLAYLIST = "37i9dQZEVXbMDoHDwVN2tF"
 
 _REFRESH_MARGIN_SEC = 60
 _REQUEST_TIMEOUT = 20
+_SEARCH_LIMIT = 10
 
 _cc_lock = threading.Lock()
 _cc_access_token: str | None = None
@@ -394,7 +395,7 @@ def search_spotify_for_response(
             503,
         )
 
-    params: dict[str, Any] = {"q": q, "type": kind, "limit": 20}
+    params: dict[str, Any] = {"q": q, "type": kind, "limit": _SEARCH_LIMIT}
     market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
     if kind in {"track", "album"} and market:
         params["market"] = market

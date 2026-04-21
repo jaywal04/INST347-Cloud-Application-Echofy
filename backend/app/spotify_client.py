@@ -18,6 +18,45 @@ GLOBAL_TOP_50_PLAYLIST = "37i9dQZEVXbMDoHDwVN2tF"
 _REFRESH_MARGIN_SEC = 60
 _REQUEST_TIMEOUT = 20
 _SEARCH_LIMIT = 10
+_GENRE_RESULT_LIMIT = 12
+_GENRE_RECOMMENDATION_LIMIT = 10
+_GENRE_SEEDS = (
+    "afrobeat",
+    "alternative",
+    "anime",
+    "blues",
+    "chill",
+    "classical",
+    "country",
+    "dancehall",
+    "drill",
+    "edm",
+    "electronic",
+    "emo",
+    "folk",
+    "funk",
+    "gospel",
+    "grime",
+    "hip-hop",
+    "house",
+    "indie",
+    "jazz",
+    "k-pop",
+    "latin",
+    "lo-fi",
+    "metal",
+    "phonk",
+    "pop",
+    "punk",
+    "r-n-b",
+    "rap",
+    "reggaeton",
+    "rock",
+    "shoegaze",
+    "soul",
+    "techno",
+    "trap",
+)
 
 _cc_lock = threading.Lock()
 _cc_access_token: str | None = None
@@ -102,6 +141,23 @@ def _normalize_artist(item: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _pretty_genre_name(genre: str) -> str:
+    return " ".join(part.capitalize() for part in (genre or "").replace("-", " ").split())
+
+
+def _normalize_genre_item(genre: str) -> dict[str, Any]:
+    seed = (genre or "").strip().lower()
+    return {
+        "type": "genre",
+        "name": _pretty_genre_name(seed) or "Genre",
+        "artists": [],
+        "album": "Genre seed",
+        "image": None,
+        "url": "",
+        "genre_seed": seed,
+    }
+
+
 def _normalize_search_item(item: dict[str, Any], item_type: str) -> dict[str, Any] | None:
     if item_type == "track":
         return _normalize_track(item)
@@ -110,6 +166,38 @@ def _normalize_search_item(item: dict[str, Any], item_type: str) -> dict[str, An
     if item_type == "artist":
         return _normalize_artist(item)
     return None
+
+
+def _resolve_spotify_token(
+    client_id: str = "",
+    client_secret: str = "",
+    legacy_user_token: str = "",
+    oauth_access_token: str = "",
+) -> tuple[str | None, str | None, tuple[dict[str, Any], int] | None]:
+    token = (oauth_access_token or legacy_user_token or "").strip()
+    if token:
+        return token, "user", None
+
+    cid, csec = client_id.strip(), client_secret.strip()
+    if cid and csec:
+        token, err = _get_client_credentials_token(cid, csec)
+        if token:
+            return token, "client", None
+        return None, None, (
+            {
+                "error": "token_error",
+                "message": err or "Could not obtain Spotify access token.",
+            },
+            502,
+        )
+
+    return None, None, (
+        {
+            "error": "missing_credentials",
+            "message": "Connect Spotify or set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the backend.",
+        },
+        503,
+    )
 
 
 def _playlist_tracks_payload(
@@ -365,34 +453,43 @@ def search_spotify_for_response(
             },
             400,
         )
-    if kind not in {"track", "album", "artist"}:
+    if kind not in {"track", "album", "artist", "genre"}:
         return (
             {
                 "error": "invalid_type",
-                "message": "Search type must be track, album, or artist.",
+                "message": "Search type must be track, album, artist, or genre.",
             },
             400,
         )
 
-    token = (oauth_access_token or legacy_user_token or "").strip()
-    cid, csec = client_id.strip(), client_secret.strip()
-    if not token and cid and csec:
-        token, err = _get_client_credentials_token(cid, csec)
-        if not token:
-            return (
-                {
-                    "error": "token_error",
-                    "message": err or "Could not obtain Spotify access token.",
-                },
-                502,
-            )
-    elif not token:
+    token, _token_source, token_error = _resolve_spotify_token(
+        client_id=client_id,
+        client_secret=client_secret,
+        legacy_user_token=legacy_user_token,
+        oauth_access_token=oauth_access_token,
+    )
+    if token_error:
+        return token_error
+    if not token:
         return (
             {
                 "error": "missing_credentials",
                 "message": "Connect Spotify or set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the backend.",
             },
             503,
+        )
+
+    if kind == "genre":
+        needle = q.lower()
+        items = [_normalize_genre_item(seed) for seed in _GENRE_SEEDS if needle in seed.lower()][: _GENRE_RESULT_LIMIT]
+        return (
+            {
+                "source": "spotify_genre_search",
+                "query": q,
+                "type": kind,
+                "items": items,
+            },
+            200,
         )
 
     params: dict[str, Any] = {"q": q, "type": kind, "limit": _SEARCH_LIMIT}
@@ -433,6 +530,85 @@ def search_spotify_for_response(
             "query": q,
             "type": kind,
             "items": items,
+        },
+        200,
+    )
+
+
+def recommend_tracks_for_genre_response(
+    client_id: str = "",
+    client_secret: str = "",
+    legacy_user_token: str = "",
+    oauth_access_token: str = "",
+    genre: str = "",
+) -> tuple[dict[str, Any], int]:
+    seed = (genre or "").strip().lower()
+    if len(seed) < 2:
+        return (
+            {
+                "error": "invalid_genre",
+                "message": "Pick a genre before asking for a recommendation.",
+            },
+            400,
+        )
+
+    token, _token_source, token_error = _resolve_spotify_token(
+        client_id=client_id,
+        client_secret=client_secret,
+        legacy_user_token=legacy_user_token,
+        oauth_access_token=oauth_access_token,
+    )
+    if token_error:
+        return token_error
+    if not token:
+        return (
+            {
+                "error": "missing_credentials",
+                "message": "Connect Spotify or set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the backend.",
+            },
+            503,
+        )
+
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
+    params: dict[str, Any] = {
+        "q": f"genre:{seed}",
+        "type": "track",
+        "limit": _GENRE_RECOMMENDATION_LIMIT,
+    }
+    if market:
+        params["market"] = market
+
+    res = requests.get(
+        f"{SPOTIFY_API}/search",
+        headers=_headers(token),
+        params=params,
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if res.status_code != 200:
+        try:
+            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+        except Exception:
+            detail = res.text[:200]
+        return (
+            {
+                "error": "spotify_recommendation_error",
+                "message": "Could not load Spotify recommendations for that genre.",
+                "detail": detail,
+            },
+            502,
+        )
+
+    items = []
+    for raw in (res.json().get("tracks") or {}).get("items") or []:
+        item = _normalize_track(raw)
+        if item:
+            items.append(item)
+
+    return (
+        {
+            "source": "spotify_genre_recommendations",
+            "genre": seed,
+            "tracks": items,
         },
         200,
     )

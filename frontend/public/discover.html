@@ -38,19 +38,20 @@
 
       <div class="discover-panel-head">
         <h2 class="section-title discover-panel-title">Search Spotify</h2>
-        <p class="discover-panel-desc">Look up a track, album, or artist and save ideas to a shortlist before you rate them.</p>
+        <p class="discover-panel-desc">Look up a track, album, artist, or genre and save ideas to a shortlist before you rate them.</p>
       </div>
       <div class="discover-filter-row" role="group" aria-label="Spotify search type">
         <button type="button" class="btn-ghost btn-sm is-active" data-search-type="track" aria-pressed="true">Tracks</button>
         <button type="button" class="btn-ghost btn-sm" data-search-type="album" aria-pressed="false">Albums</button>
         <button type="button" class="btn-ghost btn-sm" data-search-type="artist" aria-pressed="false">Artists</button>
+        <button type="button" class="btn-ghost btn-sm" data-search-type="genre" aria-pressed="false">Genres</button>
       </div>
       <form class="discover-search-form" id="spotify-search-form">
         <div class="search-wrap discover-search-wrap">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
-          <input type="search" id="spotify-search-input" placeholder="Search songs, albums, or artists..." autocomplete="off" />
+          <input type="search" id="spotify-search-input" placeholder="Search songs, albums, artists, or genres..." autocomplete="off" />
           <button type="submit">Search</button>
         </div>
       </form>
@@ -61,7 +62,7 @@
 
       <div class="discover-panel-head">
         <h2 class="section-title discover-panel-title">Make a pick</h2>
-        <p class="discover-panel-desc">Use the tracks you loaded or searched to get a random recommendation, then keep anything interesting in your shortlist.</p>
+        <p class="discover-panel-desc">Use the tracks you loaded or searched to get a random recommendation, or search a genre and let Echofy pull a pick that matches that vibe.</p>
       </div>
       <div class="discover-actions-row">
         <button type="button" class="btn-ghost btn-sm" id="btn-surprise">Surprise me</button>

@@ -26,6 +26,12 @@
   var itemCache = {};
   var shortlist = loadShortlist();
   var reviews = {};
+  var searchPlaceholders = {
+    track: 'Search songs...',
+    album: 'Search albums...',
+    artist: 'Search artists...',
+    genre: 'Search genres like afrobeat, house, or indie...',
+  };
 
   if (!btn || !statusEl || !resultsEl) return;
 
@@ -176,6 +182,11 @@
     if (source === 'global_top_50') return 'Global Top 50 (Spotify)';
     if (source === 'new_releases') return 'New releases (Spotify)';
     if (source === 'spotify_search') return 'Search results (Spotify)';
+    if (source === 'spotify_genre_search') return 'Genre seeds (Spotify)';
+    if (source === 'spotify_genre_recommendations' && data && data.genre) {
+      return 'Genre pick · ' + prettyGenreName(data.genre);
+    }
+    if (source === 'spotify_genre_recommendations') return 'Genre pick (Spotify)';
     if (source === 'featured_playlist' && data && data.playlist_name) {
       return 'Featured: ' + data.playlist_name + ' (Spotify)';
     }
@@ -184,9 +195,19 @@
   }
 
   function metaText(item) {
+    if (item.type === 'genre') return item.album || 'Genre seed';
     var artists = (item.artists || []).join(', ');
     if (artists && item.album) return artists + ' · ' + item.album;
     return artists || item.album || (item.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1) : 'Spotify');
+  }
+
+  function prettyGenreName(name) {
+    return String(name || '')
+      .split('-')
+      .map(function (part) {
+        return part ? part.charAt(0).toUpperCase() + part.slice(1) : part;
+      })
+      .join(' ');
   }
 
   function createItemRow(item, index, options) {
@@ -208,7 +229,7 @@
       img.height = 48;
       art.appendChild(img);
     } else {
-      art.textContent = item.type === 'artist' ? 'A' : '♪';
+      art.textContent = item.type === 'artist' ? 'A' : item.type === 'genre' ? 'G' : '♪';
     }
 
     var body = document.createElement('div');
@@ -245,19 +266,28 @@
     var actions = document.createElement('div');
     actions.className = 'spotify-track-actions';
 
-    var saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = 'btn-ghost btn-sm';
-    saveBtn.textContent = opts.remove ? 'Remove' : isSaved(item) ? 'Saved' : 'Save';
-    saveBtn.setAttribute(opts.remove ? 'data-remove-item' : 'data-save-item', itemKey(item));
-    actions.appendChild(saveBtn);
+    if (item.type === 'genre') {
+      var genrePickBtn = document.createElement('button');
+      genrePickBtn.type = 'button';
+      genrePickBtn.className = 'btn-ghost btn-sm';
+      genrePickBtn.textContent = 'Make a pick';
+      genrePickBtn.setAttribute('data-genre-pick', item.genre_seed || item.name || '');
+      actions.appendChild(genrePickBtn);
+    } else {
+      var saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn-ghost btn-sm';
+      saveBtn.textContent = opts.remove ? 'Remove' : isSaved(item) ? 'Saved' : 'Save';
+      saveBtn.setAttribute(opts.remove ? 'data-remove-item' : 'data-save-item', itemKey(item));
+      actions.appendChild(saveBtn);
 
-    var reviewBtn = document.createElement('button');
-    reviewBtn.type = 'button';
-    reviewBtn.className = 'btn-ghost btn-sm';
-    reviewBtn.textContent = review ? 'Edit review' : 'Rate / Review';
-    reviewBtn.setAttribute('data-review-item', itemKey(item));
-    actions.appendChild(reviewBtn);
+      var reviewBtn = document.createElement('button');
+      reviewBtn.type = 'button';
+      reviewBtn.className = 'btn-ghost btn-sm';
+      reviewBtn.textContent = review ? 'Edit review' : 'Rate / Review';
+      reviewBtn.setAttribute('data-review-item', itemKey(item));
+      actions.appendChild(reviewBtn);
+    }
 
     if (item.url) {
       var open = document.createElement('a');
@@ -452,6 +482,13 @@
   }
 
   function handleListClick(event) {
+    var genrePickBtn = event.target.closest('[data-genre-pick]');
+    if (genrePickBtn) {
+      var genreSeed = genrePickBtn.getAttribute('data-genre-pick');
+      requestGenrePick(genreSeed);
+      return;
+    }
+
     var saveBtn = event.target.closest('[data-save-item]');
     if (saveBtn) {
       var saveKey = saveBtn.getAttribute('data-save-item');
@@ -482,6 +519,66 @@
       var row = reviewBtn.closest('.spotify-track');
       if (reviewItem && row) toggleReviewForm(row, reviewItem);
     }
+  }
+
+  function requestGenrePick(genreSeed) {
+    var seed = String(genreSeed || '').trim().toLowerCase();
+    if (!seed) {
+      if (surpriseStatusEl) surpriseStatusEl.textContent = 'Search for a genre first so I know what mood to use.';
+      return;
+    }
+    if (!API_BASE) {
+      if (surpriseStatusEl) surpriseStatusEl.textContent = 'API base URL is not configured for this host.';
+      return;
+    }
+
+    if (surpriseStatusEl) surpriseStatusEl.textContent = 'Pulling a genre-based recommendation...';
+    if (surpriseBtn) {
+      surpriseBtn.disabled = true;
+      surpriseBtn.textContent = 'Picking...';
+    }
+
+    fetch(
+      API_BASE + '/api/spotify/recommend-by-genre?genre=' + encodeURIComponent(seed),
+      fetchOpts
+    )
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      })
+      .then(function (_ref) {
+        var data = _ref.data;
+        if (!_ref.ok) {
+          surpriseResultEl.hidden = true;
+          surpriseStatusEl.textContent = apiErrorText(data, 'Could not load a genre-based recommendation.');
+          return;
+        }
+
+        var tracks = data.tracks || [];
+        if (!tracks.length) {
+          surpriseResultEl.hidden = true;
+          surpriseStatusEl.textContent = 'Spotify had no tracks ready for that genre yet.';
+          return;
+        }
+
+        rememberItems(tracks);
+        var pick = tracks[Math.floor(Math.random() * tracks.length)];
+        surpriseStatusEl.textContent = 'Pick based on ' + prettyGenreName(data.genre || seed) + '.';
+        renderItems(surpriseResultEl, sourceLabel(data.source, data), [pick], { single: true });
+        refreshSaveButtons();
+      })
+      .catch(function (err) {
+        console.error('[Echofy] Spotify /api/spotify/recommend-by-genre fetch failed', err);
+        surpriseResultEl.hidden = true;
+        surpriseStatusEl.textContent = 'Network error while loading a genre pick.';
+      })
+      .finally(function () {
+        if (surpriseBtn) {
+          surpriseBtn.disabled = false;
+          surpriseBtn.textContent = 'Surprise me';
+        }
+      });
   }
 
   btn.addEventListener('click', function () {
@@ -549,7 +646,10 @@
         candidate.classList.toggle('is-active', active);
         candidate.setAttribute('aria-pressed', active ? 'true' : 'false');
       });
-      if (searchInput) searchInput.focus();
+      if (searchInput) {
+        searchInput.placeholder = searchPlaceholders[selectedSearchType] || searchPlaceholders.track;
+        searchInput.focus();
+      }
     });
   });
 
@@ -611,9 +711,15 @@
 
   if (surpriseBtn) {
     surpriseBtn.addEventListener('click', function () {
+      if (selectedSearchType === 'genre' && currentItems.length && currentItems[0].type === 'genre') {
+        var genrePick = currentItems[Math.floor(Math.random() * currentItems.length)];
+        requestGenrePick(genrePick.genre_seed || genrePick.name);
+        return;
+      }
+
       var pool = currentItems.length ? currentItems : shortlist;
       if (!pool.length) {
-        surpriseStatusEl.textContent = 'Load top Spotify music or search first, then I can pick one.';
+        surpriseStatusEl.textContent = 'Load top Spotify music, search Spotify, or search a genre first, then I can pick one.';
         surpriseResultEl.hidden = true;
         return;
       }

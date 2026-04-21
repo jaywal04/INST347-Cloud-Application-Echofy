@@ -570,25 +570,19 @@ def recommend_tracks_for_genre_response(
         )
 
     market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
-    params: dict[str, Any] = {
-        "q": f"genre:{seed}",
-        "type": "track",
-        "limit": _GENRE_RECOMMENDATION_LIMIT,
-    }
-    if market:
-        params["market"] = market
+    headers = _headers(token)
 
-    res = requests.get(
+    artist_search = requests.get(
         f"{SPOTIFY_API}/search",
-        headers=_headers(token),
-        params=params,
+        headers=headers,
+        params={"q": f"genre:{seed}", "type": "artist", "limit": 5},
         timeout=_REQUEST_TIMEOUT,
     )
-    if res.status_code != 200:
+    if artist_search.status_code != 200:
         try:
-            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+            detail = artist_search.json().get("error", {}).get("message", "") or artist_search.text[:200]
         except Exception:
-            detail = res.text[:200]
+            detail = artist_search.text[:200]
         return (
             {
                 "error": "spotify_recommendation_error",
@@ -598,11 +592,75 @@ def recommend_tracks_for_genre_response(
             502,
         )
 
+    artist_names = []
+    for artist in (artist_search.json().get("artists") or {}).get("items") or []:
+        name = str(artist.get("name") or "").strip()
+        if name and name.lower() not in [existing.lower() for existing in artist_names]:
+            artist_names.append(name)
+
     items = []
-    for raw in (res.json().get("tracks") or {}).get("items") or []:
-        item = _normalize_track(raw)
-        if item:
+    seen_urls = set()
+
+    for artist_name in artist_names:
+        params = {"q": f'artist:"{artist_name}"', "type": "track", "limit": 5}
+        if market:
+            params["market"] = market
+        res = requests.get(
+            f"{SPOTIFY_API}/search",
+            headers=headers,
+            params=params,
+            timeout=_REQUEST_TIMEOUT,
+        )
+        if res.status_code != 200:
+            continue
+        for raw in (res.json().get("tracks") or {}).get("items") or []:
+            artist_names_on_track = [str(a.get("name") or "").strip().lower() for a in raw.get("artists") or []]
+            if artist_name.lower() not in artist_names_on_track:
+                continue
+            item = _normalize_track(raw)
+            if not item:
+                continue
+            dedupe_key = item.get("url") or f"{item.get('name','')}|{','.join(item.get('artists') or [])}"
+            if dedupe_key in seen_urls:
+                continue
+            seen_urls.add(dedupe_key)
             items.append(item)
+            if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+                break
+        if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+            break
+
+    if not items:
+        params = {
+            "q": f"genre:{seed}",
+            "type": "track",
+            "limit": _GENRE_RECOMMENDATION_LIMIT,
+        }
+        if market:
+            params["market"] = market
+        res = requests.get(
+            f"{SPOTIFY_API}/search",
+            headers=headers,
+            params=params,
+            timeout=_REQUEST_TIMEOUT,
+        )
+        if res.status_code != 200:
+            try:
+                detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+            except Exception:
+                detail = res.text[:200]
+            return (
+                {
+                    "error": "spotify_recommendation_error",
+                    "message": "Could not load Spotify recommendations for that genre.",
+                    "detail": detail,
+                },
+                502,
+            )
+        for raw in (res.json().get("tracks") or {}).get("items") or []:
+            item = _normalize_track(raw)
+            if item:
+                items.append(item)
 
     return (
         {

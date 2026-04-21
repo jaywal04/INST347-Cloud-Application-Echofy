@@ -15,7 +15,7 @@ from werkzeug.security import generate_password_hash
 from app.blob_storage import delete_blob_by_url, upload_profile_image
 from app.database import db
 from app.email_service import send_verification_code
-from app.models import FriendRequest, PendingVerification, User
+from app.models import FriendRequest, PendingVerification, User, utcnow_naive
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -68,7 +68,7 @@ def signup():
         purpose="signup",
         username=username,
         password_hash=generate_password_hash(password),
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=3),
+        expires_at=utcnow_naive() + timedelta(minutes=3),
     )
     db.session.add(pv)
     db.session.commit()
@@ -153,7 +153,7 @@ def resend_code():
     code = _generate_code()
     pv.code = code
     pv.attempts = 0
-    pv.expires_at = datetime.now(timezone.utc) + timedelta(minutes=3)
+    pv.expires_at = utcnow_naive() + timedelta(minutes=3)
     db.session.commit()
 
     if not send_verification_code(email, code, purpose=purpose):
@@ -344,7 +344,7 @@ def delete_request():
         code=code,
         purpose="delete",
         user_id=current_user.id,
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=3),
+        expires_at=utcnow_naive() + timedelta(minutes=3),
     )
     db.session.add(pv)
     db.session.commit()

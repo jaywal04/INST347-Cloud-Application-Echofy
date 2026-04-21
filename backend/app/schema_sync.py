@@ -1,6 +1,7 @@
-"""Add missing columns on `users` to match the SQLAlchemy User model (Azure SQL / SQLite).
+"""Add missing columns on existing tables to match the SQLAlchemy models.
 
-`db.create_all()` does not alter existing tables; this runs after create_all on startup.
+`db.create_all()` creates missing tables, but it does not alter existing ones.
+This startup sync fills in missing columns for legacy SQLite/Azure SQL tables.
 """
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy import Boolean, DateTime, Integer, String, inspect, text
 from sqlalchemy.schema import Column
 
-from app.models import User
+from app.models import FriendRequest, PendingVerification, SongReview, User
 
 
 def _quote_table_sqlite(name: str) -> str:
@@ -103,8 +104,7 @@ def _sqlite_column_ddl(col: Column) -> str:
     return f"{q} {typ} NOT NULL"
 
 
-def ensure_user_table_columns(engine) -> None:
-    table = User.__table__
+def _ensure_table_columns(engine, table) -> None:
     table_name = table.name
     dialect_name = engine.dialect.name
 
@@ -134,3 +134,13 @@ def ensure_user_table_columns(engine) -> None:
         with engine.begin() as conn:
             conn.execute(stmt)
         existing.add(col.name.lower())
+
+
+def ensure_model_table_columns(engine) -> None:
+    for table in (
+        User.__table__,
+        PendingVerification.__table__,
+        FriendRequest.__table__,
+        SongReview.__table__,
+    ):
+        _ensure_table_columns(engine, table)

@@ -62,6 +62,6 @@ def init_db(app):
     db.init_app(app)
     with app.app_context():
         db.create_all()
-        from app.schema_sync import ensure_user_table_columns
+        from app.schema_sync import ensure_model_table_columns
 
-        ensure_user_table_columns(db.engine)
+        ensure_model_table_columns(db.engine)

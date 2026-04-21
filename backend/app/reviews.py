@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
-
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
 from app.database import db
-from app.models import SongReview
+from app.models import SongReview, utcnow_naive
 
 
 reviews_bp = Blueprint("reviews", __name__, url_prefix="/api/reviews")
@@ -97,7 +95,7 @@ def upsert_review():
     review.spotify_url = _clean_string(item.get("url"), 2048)
     review.rating = rating
     review.text = text
-    review.updated_at = datetime.now(timezone.utc)
+    review.updated_at = utcnow_naive()
 
     db.session.commit()
     return jsonify(ok=True, review=review.to_dict())

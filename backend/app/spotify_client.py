@@ -312,11 +312,14 @@ def fetch_top_tracks_for_response(
     oauth_access_token: str = "",
 ) -> tuple[dict[str, Any], int]:
     """
-    When Client ID + Secret are set: load Global Top 50 via Client Credentials (dashboard chart).
-    Otherwise: OAuth / legacy user token for personalized top tracks + playlist fallback.
+    Prefer a connected Spotify user token for personalized top tracks.
+    Fall back to Client Credentials for a public chart only when no user token is available.
     """
     user = (oauth_access_token or legacy_user_token or "").strip()
     cid, csec = client_id.strip(), client_secret.strip()
+
+    if user:
+        return _legacy_user_then_playlist(user)
 
     if cid and csec:
         token, err = _get_client_credentials_token(cid, csec)
@@ -329,9 +332,6 @@ def fetch_top_tracks_for_response(
                 502,
             )
         return fetch_public_chart(token)
-
-    if user:
-        return _legacy_user_then_playlist(user)
 
     return (
         {
@@ -373,9 +373,9 @@ def search_spotify_for_response(
             400,
         )
 
-    cid, csec = client_id.strip(), client_secret.strip()
     token = (oauth_access_token or legacy_user_token or "").strip()
-    if cid and csec:
+    cid, csec = client_id.strip(), client_secret.strip()
+    if not token and cid and csec:
         token, err = _get_client_credentials_token(cid, csec)
         if not token:
             return (

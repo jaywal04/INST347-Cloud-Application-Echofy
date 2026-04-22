@@ -19,6 +19,7 @@ from app.reviews import reviews_bp
 from app.spotify_client import (
     SPOTIFY_TOKEN_URL,
     fetch_top_tracks_for_response,
+    recommend_similar_for_item_response,
     recommend_tracks_for_genre_response,
     search_spotify_for_response,
 )
@@ -184,6 +185,18 @@ def create_app() -> Flask:
             legacy_user_token=_spotify_legacy_user_token(),
             oauth_access_token=oauth_tok,
             genre=request.args.get("genre", ""),
+        )
+        return jsonify(payload), status
+
+    @app.post("/api/spotify/recommend-like")
+    def spotify_recommend_like():
+        oauth_tok = session.get("spotify_access_token") or ""
+        payload, status = recommend_similar_for_item_response(
+            client_id=_spotify_client_id(),
+            client_secret=_spotify_client_secret(),
+            legacy_user_token=_spotify_legacy_user_token(),
+            oauth_access_token=oauth_tok,
+            item=request.get_json(silent=True) or {},
         )
         return jsonify(payload), status
 

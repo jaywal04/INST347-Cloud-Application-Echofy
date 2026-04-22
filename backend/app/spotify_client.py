@@ -78,6 +78,30 @@ _POPULAR_GENRE_ARTISTS = {
     "drill": ["Pop Smoke", "Lil Durk", "Central Cee", "Headie One", "Fivio Foreign", "Sheff G", "Sleepy Hallow", "Polo G", "Digga D", "King Von"],
     "k-pop": ["BTS", "BLACKPINK", "NewJeans", "Stray Kids", "TWICE", "SEVENTEEN", "aespa", "LE SSERAFIM", "TXT", "IVE"],
 }
+_GENRE_ALIASES = {
+    "rap": ["rap", "hip hop", "hip-hop", "trap", "drill"],
+    "hip-hop": ["hip hop", "hip-hop", "rap", "alternative hip hop", "underground hip hop"],
+    "trap": ["trap"],
+    "pop": ["pop", "dance pop", "electropop", "bedroom pop"],
+    "rock": ["rock", "alternative rock", "indie rock", "hard rock", "modern rock", "punk"],
+    "country": ["country", "country road", "contemporary country", "outlaw country"],
+    "house": ["house", "deep house", "tech house", "progressive house"],
+    "afrobeat": ["afrobeat", "afrobeats", "nigerian pop"],
+    "r-n-b": ["r&b", "r-n-b", "rnb", "soul", "neo soul"],
+    "reggaeton": ["reggaeton"],
+    "latin": ["latin", "latin pop", "latin trap", "urbano latino"],
+    "indie": ["indie", "indie pop", "indie rock", "indietronica"],
+    "electronic": ["electronic", "electronica", "downtempo"],
+    "edm": ["edm", "dance", "big room", "festival"],
+    "techno": ["techno"],
+    "drill": ["drill", "brooklyn drill", "uk drill"],
+    "k-pop": ["k-pop", "k pop"],
+    "jazz": ["jazz"],
+    "soul": ["soul"],
+    "metal": ["metal", "metalcore", "deathcore", "heavy metal"],
+    "folk": ["folk", "folk-pop"],
+    "phonk": ["phonk"],
+}
 
 _cc_lock = threading.Lock()
 _cc_access_token: str | None = None
@@ -187,6 +211,56 @@ def _normalize_search_item(item: dict[str, Any], item_type: str) -> dict[str, An
     if item_type == "artist":
         return _normalize_artist(item)
     return None
+
+
+def _canonical_genre(values: list[str] | tuple[str, ...] | None) -> str | None:
+    haystacks = [str(value or "").strip().lower() for value in (values or []) if str(value or "").strip()]
+    if not haystacks:
+        return None
+    for canonical, aliases in _GENRE_ALIASES.items():
+        for haystack in haystacks:
+            if canonical in haystack:
+                return canonical
+            if any(alias in haystack for alias in aliases):
+                return canonical
+    return None
+
+
+def _artist_search_items(access_token: str, query: str, *, limit: int = 3) -> list[dict[str, Any]]:
+    res = requests.get(
+        f"{SPOTIFY_API}/search",
+        headers=_headers(access_token),
+        params={"q": query, "type": "artist", "limit": limit},
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if res.status_code != 200:
+        return []
+    return (res.json().get("artists") or {}).get("items") or []
+
+
+def _infer_genre_from_item(access_token: str, item: dict[str, Any]) -> str | None:
+    item_type = str(item.get("type") or "").strip().lower()
+    if item_type == "genre":
+        return _canonical_genre([item.get("genre_seed") or item.get("name") or ""])
+
+    if item_type == "artist":
+        metadata = str(item.get("album") or "")
+        genre = _canonical_genre([metadata, item.get("name") or ""])
+        if genre:
+            return genre
+        artists = _artist_search_items(access_token, str(item.get("name") or ""), limit=1)
+        if artists:
+            return _canonical_genre((artists[0].get("genres") or []) + [artists[0].get("name") or ""])
+        return None
+
+    artists = item.get("artists") or []
+    lead_artist = str(artists[0] if artists else "").strip()
+    if not lead_artist:
+        return None
+    artist_hits = _artist_search_items(access_token, lead_artist, limit=1)
+    if not artist_hits:
+        return None
+    return _canonical_genre((artist_hits[0].get("genres") or []) + [lead_artist])
 
 
 def _resolve_spotify_token(
@@ -696,6 +770,115 @@ def recommend_tracks_for_genre_response(
             "source": "spotify_genre_recommendations",
             "genre": seed,
             "tracks": items,
+        },
+        200,
+    )
+
+
+def recommend_similar_for_item_response(
+    client_id: str = "",
+    client_secret: str = "",
+    legacy_user_token: str = "",
+    oauth_access_token: str = "",
+    item: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], int]:
+    seed_item = item or {}
+    item_type = str(seed_item.get("type") or "track").strip().lower()
+    if item_type not in {"track", "album", "artist"}:
+        return (
+            {
+                "error": "invalid_item_type",
+                "message": "Recommendations are supported for tracks, albums, and artists.",
+            },
+            400,
+        )
+
+    token, _token_source, token_error = _resolve_spotify_token(
+        client_id=client_id,
+        client_secret=client_secret,
+        legacy_user_token=legacy_user_token,
+        oauth_access_token=oauth_access_token,
+    )
+    if token_error:
+        return token_error
+    if not token:
+        return (
+            {
+                "error": "missing_credentials",
+                "message": "Connect Spotify or set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the backend.",
+            },
+            503,
+        )
+
+    genre = _infer_genre_from_item(token, seed_item)
+    if not genre:
+        return (
+            {
+                "error": "genre_inference_failed",
+                "message": "Could not determine a genre for that Spotify item.",
+            },
+            422,
+        )
+
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
+    headers = _headers(token)
+    artist_names = list(_POPULAR_GENRE_ARTISTS.get(genre, []))
+    for artist in _artist_search_items(token, f"genre:{genre}", limit=_GENRE_ARTIST_SEARCH_LIMIT):
+        name = str(artist.get("name") or "").strip()
+        if name and name.lower() not in [existing.lower() for existing in artist_names]:
+            artist_names.append(name)
+
+    items = []
+    seen = set()
+    seed_name = str(seed_item.get("name") or "").strip().lower()
+    seed_url = str(seed_item.get("url") or "").strip()
+
+    for artist_name in artist_names:
+        for offset in (0, _GENRE_TRACKS_PER_ARTIST):
+            params = {
+                "q": f'artist:"{artist_name}"',
+                "type": item_type,
+                "limit": _GENRE_TRACKS_PER_ARTIST,
+                "offset": offset,
+            }
+            if market and item_type in {"track", "album"}:
+                params["market"] = market
+            res = requests.get(
+                f"{SPOTIFY_API}/search",
+                headers=headers,
+                params=params,
+                timeout=_REQUEST_TIMEOUT,
+            )
+            if res.status_code != 200:
+                continue
+            bucket = (res.json().get(f"{item_type}s") or {}).get("items") or []
+            for raw in bucket:
+                normalized = _normalize_search_item(raw, item_type)
+                if not normalized:
+                    continue
+                dedupe_key = normalized.get("url") or f"{normalized.get('name','')}|{','.join(normalized.get('artists') or [])}|{normalized.get('album') or ''}"
+                if dedupe_key in seen:
+                    continue
+                if seed_url and normalized.get("url") == seed_url:
+                    continue
+                if seed_name and str(normalized.get("name") or "").strip().lower() == seed_name:
+                    continue
+                seen.add(dedupe_key)
+                items.append(normalized)
+                if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+                    break
+            if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+                break
+        if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+            break
+
+    return (
+        {
+            "source": "spotify_similar_recommendations",
+            "genre": genre,
+            "seed_type": item_type,
+            "seed_name": seed_item.get("name") or "",
+            "items": items,
         },
         200,
     )

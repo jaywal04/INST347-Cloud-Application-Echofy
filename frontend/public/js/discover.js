@@ -581,6 +581,69 @@
       });
   }
 
+  function requestSimilarPick(item) {
+    if (!item) {
+      if (surpriseStatusEl) surpriseStatusEl.textContent = 'Pick a song, album, or artist first.';
+      return;
+    }
+    if (!API_BASE) {
+      if (surpriseStatusEl) surpriseStatusEl.textContent = 'API base URL is not configured for this host.';
+      return;
+    }
+
+    if (surpriseStatusEl) surpriseStatusEl.textContent = 'Finding something in the same lane...';
+    if (surpriseBtn) {
+      surpriseBtn.disabled = true;
+      surpriseBtn.textContent = 'Picking...';
+    }
+
+    fetch(API_BASE + '/api/spotify/recommend-like', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      })
+      .then(function (_ref) {
+        var data = _ref.data;
+        if (!_ref.ok) {
+          surpriseResultEl.hidden = true;
+          surpriseStatusEl.textContent = apiErrorText(data, 'Could not load a same-genre recommendation.');
+          return;
+        }
+
+        var items = data.items || [];
+        if (!items.length) {
+          surpriseResultEl.hidden = true;
+          surpriseStatusEl.textContent = 'Spotify did not return a strong same-genre recommendation yet.';
+          return;
+        }
+
+        rememberItems(items);
+        var pick = items[Math.floor(Math.random() * items.length)];
+        var seedName = data.seed_name || item.name || 'your pick';
+        surpriseStatusEl.textContent =
+          'Because you picked ' + seedName + ', here is another ' + prettyGenreName(data.genre || '') + ' ' + (data.seed_type || item.type || 'pick') + '.';
+        renderItems(surpriseResultEl, 'Same-genre pick · ' + prettyGenreName(data.genre || ''), [pick], { single: true });
+        refreshSaveButtons();
+      })
+      .catch(function (err) {
+        console.error('[Echofy] Spotify /api/spotify/recommend-like fetch failed', err);
+        surpriseResultEl.hidden = true;
+        surpriseStatusEl.textContent = 'Network error while loading a same-genre recommendation.';
+      })
+      .finally(function () {
+        if (surpriseBtn) {
+          surpriseBtn.disabled = false;
+          surpriseBtn.textContent = 'Surprise me';
+        }
+      });
+  }
+
   btn.addEventListener('click', function () {
     if (!API_BASE) {
       statusEl.textContent = 'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
@@ -723,10 +786,8 @@
         surpriseResultEl.hidden = true;
         return;
       }
-      var pick = pool[Math.floor(Math.random() * pool.length)];
-      surpriseStatusEl.textContent = 'Try this next.';
-      renderItems(surpriseResultEl, 'Random pick', [pick], { single: true });
-      refreshSaveButtons();
+      var seedItem = pool[Math.floor(Math.random() * pool.length)];
+      requestSimilarPick(seedItem);
     });
   }
 

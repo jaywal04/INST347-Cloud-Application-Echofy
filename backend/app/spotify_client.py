@@ -19,7 +19,9 @@ _REFRESH_MARGIN_SEC = 60
 _REQUEST_TIMEOUT = 20
 _SEARCH_LIMIT = 10
 _GENRE_RESULT_LIMIT = 12
-_GENRE_RECOMMENDATION_LIMIT = 10
+_GENRE_RECOMMENDATION_LIMIT = 50
+_GENRE_ARTIST_SEARCH_LIMIT = 12
+_GENRE_TRACKS_PER_ARTIST = 8
 _GENRE_SEEDS = (
     "afrobeat",
     "alternative",
@@ -58,23 +60,23 @@ _GENRE_SEEDS = (
     "trap",
 )
 _POPULAR_GENRE_ARTISTS = {
-    "rap": ["Drake", "Kendrick Lamar", "J. Cole", "Future", "Lil Baby", "21 Savage"],
-    "hip-hop": ["Drake", "Kendrick Lamar", "Travis Scott", "Tyler, The Creator", "J. Cole"],
-    "trap": ["Future", "Young Thug", "Lil Baby", "Gunna", "21 Savage"],
-    "pop": ["Taylor Swift", "Dua Lipa", "The Weeknd", "Ariana Grande", "Olivia Rodrigo"],
-    "rock": ["Foo Fighters", "Arctic Monkeys", "Red Hot Chili Peppers", "The Killers"],
-    "country": ["Morgan Wallen", "Luke Combs", "Zach Bryan", "Chris Stapleton"],
-    "house": ["Fred again..", "FISHER", "John Summit", "Chris Lake", "MK"],
-    "afrobeat": ["Burna Boy", "Wizkid", "Rema", "Asake", "Tems"],
-    "r-n-b": ["SZA", "Summer Walker", "Brent Faiyaz", "PARTYNEXTDOOR", "H.E.R."],
-    "reggaeton": ["Bad Bunny", "Feid", "J Balvin", "Karol G", "Rauw Alejandro"],
-    "latin": ["Bad Bunny", "Peso Pluma", "Karol G", "Rauw Alejandro", "J Balvin"],
-    "indie": ["Phoebe Bridgers", "The 1975", "beabadoobee", "Clairo", "Mitski"],
-    "electronic": ["Fred again..", "Skrillex", "Disclosure", "Kaytranada", "Jamie xx"],
-    "edm": ["Martin Garrix", "Avicii", "Calvin Harris", "Zedd", "David Guetta"],
-    "techno": ["Charlotte de Witte", "Amelie Lens", "Adam Beyer", "Boris Brejcha"],
-    "drill": ["Pop Smoke", "Lil Durk", "Central Cee", "Headie One"],
-    "k-pop": ["BTS", "BLACKPINK", "NewJeans", "Stray Kids", "TWICE"],
+    "rap": ["Drake", "Kendrick Lamar", "J. Cole", "Future", "Lil Baby", "21 Savage", "Travis Scott", "Tyler, The Creator", "Gunna", "Young Thug"],
+    "hip-hop": ["Drake", "Kendrick Lamar", "Travis Scott", "Tyler, The Creator", "J. Cole", "Future", "A$AP Rocky", "Lil Baby", "Doja Cat", "21 Savage"],
+    "trap": ["Future", "Young Thug", "Lil Baby", "Gunna", "21 Savage", "Travis Scott", "Lil Uzi Vert", "Playboi Carti", "Kodak Black", "Chief Keef"],
+    "pop": ["Taylor Swift", "Dua Lipa", "The Weeknd", "Ariana Grande", "Olivia Rodrigo", "Sabrina Carpenter", "Harry Styles", "Ed Sheeran", "Justin Bieber", "Billie Eilish"],
+    "rock": ["Foo Fighters", "Arctic Monkeys", "Red Hot Chili Peppers", "The Killers", "Green Day", "Paramore", "The Strokes", "Linkin Park", "Kings of Leon", "Coldplay"],
+    "country": ["Morgan Wallen", "Luke Combs", "Zach Bryan", "Chris Stapleton", "Lainey Wilson", "Kane Brown", "Bailey Zimmerman", "Jason Aldean", "Luke Bryan", "Thomas Rhett"],
+    "house": ["Fred again..", "FISHER", "John Summit", "Chris Lake", "MK", "Dom Dolla", "Mau P", "Disclosure", "Jamie xx", "Vintage Culture"],
+    "afrobeat": ["Burna Boy", "Wizkid", "Rema", "Asake", "Tems", "Davido", "Ayra Starr", "Fireboy DML", "Omah Lay", "CKay"],
+    "r-n-b": ["SZA", "Summer Walker", "Brent Faiyaz", "PARTYNEXTDOOR", "H.E.R.", "Giveon", "Jhene Aiko", "6LACK", "The Weeknd", "Usher"],
+    "reggaeton": ["Bad Bunny", "Feid", "J Balvin", "Karol G", "Rauw Alejandro", "Ozuna", "Anuel AA", "Myke Towers", "Daddy Yankee", "Nicky Jam"],
+    "latin": ["Bad Bunny", "Peso Pluma", "Karol G", "Rauw Alejandro", "J Balvin", "Feid", "Shakira", "Anitta", "Manuel Turizo", "Myke Towers"],
+    "indie": ["Phoebe Bridgers", "The 1975", "beabadoobee", "Clairo", "Mitski", "Wallows", "Japanese Breakfast", "The Neighbourhood", "Men I Trust", "Tame Impala"],
+    "electronic": ["Fred again..", "Skrillex", "Disclosure", "Kaytranada", "Jamie xx", "Flume", "ODESZA", "Four Tet", "Bicep", "Channel Tres"],
+    "edm": ["Martin Garrix", "Avicii", "Calvin Harris", "Zedd", "David Guetta", "Kygo", "Alesso", "Swedish House Mafia", "Marshmello", "Tiësto"],
+    "techno": ["Charlotte de Witte", "Amelie Lens", "Adam Beyer", "Boris Brejcha", "Carl Cox", "Nina Kraviz", "ARTBAT", "Tale Of Us", "Enrico Sangiuliano", "Anyma"],
+    "drill": ["Pop Smoke", "Lil Durk", "Central Cee", "Headie One", "Fivio Foreign", "Sheff G", "Sleepy Hallow", "Polo G", "Digga D", "King Von"],
+    "k-pop": ["BTS", "BLACKPINK", "NewJeans", "Stray Kids", "TWICE", "SEVENTEEN", "aespa", "LE SSERAFIM", "TXT", "IVE"],
 }
 
 _cc_lock = threading.Lock()
@@ -596,7 +598,7 @@ def recommend_tracks_for_genre_response(
     artist_search = requests.get(
         f"{SPOTIFY_API}/search",
         headers=headers,
-        params={"q": f"genre:{seed}", "type": "artist", "limit": 5},
+        params={"q": f"genre:{seed}", "type": "artist", "limit": _GENRE_ARTIST_SEARCH_LIMIT},
         timeout=_REQUEST_TIMEOUT,
     )
     if artist_search.status_code == 200:
@@ -609,39 +611,50 @@ def recommend_tracks_for_genre_response(
     seen_urls = set()
 
     for artist_name in artist_names:
-        params = {"q": f'artist:"{artist_name}"', "type": "track", "limit": 5}
-        if market:
-            params["market"] = market
-        res = requests.get(
-            f"{SPOTIFY_API}/search",
-            headers=headers,
-            params=params,
-            timeout=_REQUEST_TIMEOUT,
-        )
-        if res.status_code != 200:
-            continue
-        for raw in (res.json().get("tracks") or {}).get("items") or []:
-            artist_names_on_track = [str(a.get("name") or "").strip().lower() for a in raw.get("artists") or []]
-            if artist_name.lower() not in artist_names_on_track:
+        for offset in (0, _GENRE_TRACKS_PER_ARTIST):
+            params = {
+                "q": f'artist:"{artist_name}"',
+                "type": "track",
+                "limit": _GENRE_TRACKS_PER_ARTIST,
+                "offset": offset,
+            }
+            if market:
+                params["market"] = market
+            res = requests.get(
+                f"{SPOTIFY_API}/search",
+                headers=headers,
+                params=params,
+                timeout=_REQUEST_TIMEOUT,
+            )
+            if res.status_code != 200:
                 continue
-            item = _normalize_track(raw)
-            if not item:
-                continue
-            dedupe_key = item.get("url") or f"{item.get('name','')}|{','.join(item.get('artists') or [])}"
-            if dedupe_key in seen_urls:
-                continue
-            seen_urls.add(dedupe_key)
-            items.append(item)
+            for raw in (res.json().get("tracks") or {}).get("items") or []:
+                artist_names_on_track = [str(a.get("name") or "").strip().lower() for a in raw.get("artists") or []]
+                if artist_name.lower() not in artist_names_on_track:
+                    continue
+                item = _normalize_track(raw)
+                if not item:
+                    continue
+                dedupe_key = item.get("url") or f"{item.get('name','')}|{','.join(item.get('artists') or [])}"
+                if dedupe_key in seen_urls:
+                    continue
+                seen_urls.add(dedupe_key)
+                items.append(item)
+                if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+                    break
             if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
                 break
         if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
             break
 
-    if not items:
+    for offset in (0, 10, 20, 30, 40):
+        if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+            break
         params = {
             "q": f"genre:{seed}",
             "type": "track",
-            "limit": _GENRE_RECOMMENDATION_LIMIT,
+            "limit": 10,
+            "offset": offset,
         }
         if market:
             params["market"] = market
@@ -652,22 +665,31 @@ def recommend_tracks_for_genre_response(
             timeout=_REQUEST_TIMEOUT,
         )
         if res.status_code != 200:
-            try:
-                detail = res.json().get("error", {}).get("message", "") or res.text[:200]
-            except Exception:
-                detail = res.text[:200]
-            return (
-                {
-                    "error": "spotify_recommendation_error",
-                    "message": "Could not load Spotify recommendations for that genre.",
-                    "detail": detail,
-                },
-                502,
-            )
+            if not items:
+                try:
+                    detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+                except Exception:
+                    detail = res.text[:200]
+                return (
+                    {
+                        "error": "spotify_recommendation_error",
+                        "message": "Could not load Spotify recommendations for that genre.",
+                        "detail": detail,
+                    },
+                    502,
+                )
+            continue
         for raw in (res.json().get("tracks") or {}).get("items") or []:
             item = _normalize_track(raw)
-            if item:
-                items.append(item)
+            if not item:
+                continue
+            dedupe_key = item.get("url") or f"{item.get('name','')}|{','.join(item.get('artists') or [])}"
+            if dedupe_key in seen_urls:
+                continue
+            seen_urls.add(dedupe_key)
+            items.append(item)
+            if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
+                break
 
     return (
         {

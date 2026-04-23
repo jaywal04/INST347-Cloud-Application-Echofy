@@ -10,6 +10,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app.database import db
 
 
+def utcnow_naive() -> datetime:
+    """Return UTC as a naive datetime for SQL DATETIME/DATETIME2 columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class PendingVerification(db.Model):
     """Stores 6-digit verification codes for signup and account deletion."""
 
@@ -25,7 +30,7 @@ class PendingVerification(db.Model):
     user_id = db.Column(db.Integer, nullable=True)  # for delete purpose
     attempts = db.Column(db.Integer, default=0, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
 
     def is_expired(self) -> bool:
         now = datetime.now(timezone.utc)
@@ -52,11 +57,61 @@ class FriendRequest(db.Model):
         db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
     )
     status = db.Column(db.String(20), nullable=False, default="pending")
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+    updated_at = db.Column(db.DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     from_user = db.relationship("User", foreign_keys=[from_user_id], backref=db.backref("friend_requests_sent", lazy="dynamic"))
     to_user = db.relationship("User", foreign_keys=[to_user_id], backref=db.backref("friend_requests_received", lazy="dynamic"))
+
+
+class SongReview(db.Model):
+    """A user's Spotify rating/review saved in the app database."""
+
+    __tablename__ = "song_reviews"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "item_hash", name="uq_song_reviews_user_item"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_hash = db.Column(db.String(64), nullable=False, index=True)
+    item_key = db.Column(db.String(1024), nullable=False)
+    item_type = db.Column(db.String(20), nullable=False, default="track")
+    name = db.Column(db.String(255), nullable=False)
+    artists = db.Column(db.String(500), nullable=True)
+    album = db.Column(db.String(255), nullable=True)
+    image_url = db.Column(db.String(2048), nullable=True)
+    spotify_url = db.Column(db.String(2048), nullable=True)
+    rating = db.Column(db.Integer, nullable=False)
+    text = db.Column(db.String(280), nullable=True)
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow_naive,
+        onupdate=utcnow_naive,
+    )
+
+    user = db.relationship("User", backref=db.backref("song_reviews", lazy="dynamic"))
+
+    def to_dict(self) -> dict:
+        artists = [a.strip() for a in (self.artists or "").split(",") if a.strip()]
+        return {
+            "id": self.id,
+            "item_key": self.item_key,
+            "rating": self.rating,
+            "text": self.text or "",
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "item": {
+                "type": self.item_type,
+                "name": self.name,
+                "artists": artists,
+                "album": self.album or "",
+                "image": self.image_url or "",
+                "url": self.spotify_url or "",
+            },
+        }
 
 
 class User(UserMixin, db.Model):
@@ -67,7 +122,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
     accepted_terms = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
     age = db.Column(db.Integer, nullable=True)
     sex = db.Column(db.String(20), nullable=True)
     bio = db.Column(db.String(500), nullable=True)

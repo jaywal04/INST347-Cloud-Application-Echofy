@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy import and_, func, or_
 
 from app.database import db
-from app.models import FriendRequest, User
+from app.models import FriendRequest, User, utcnow_naive
 
 friends_bp = Blueprint("friends", __name__)
 
 
 def _now():
-    return datetime.now(timezone.utc)
+    return utcnow_naive()
 
 
 def _are_friends(a_id: int, b_id: int) -> bool:

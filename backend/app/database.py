@@ -20,10 +20,10 @@ def apply_remote_db_engine_options(app: Flask) -> None:
     opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
     opts.setdefault("pool_pre_ping", True)
     opts.setdefault("pool_recycle", 300)
-    opts.setdefault("pool_timeout", 30)
+    opts.setdefault("pool_timeout", 60)
     opts.setdefault("pool_size", 5)
     opts.setdefault("max_overflow", 2)
-    opts.setdefault("connect_args", {"timeout": 30})
+    opts.setdefault("connect_args", {"timeout": 60})
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = opts
 
 
@@ -40,7 +40,7 @@ def _build_database_uri() -> str:
         # pyodbc connection string for Azure SQL
         # Example: "Driver={ODBC Driver 18 for SQL Server};Server=tcp:myserver.database.windows.net,1433;Database=echofy;Uid=admin;Pwd=secret;Encrypt=yes;TrustServerCertificate=no;"
         # Inject ODBC driver-level retry so the driver waits for a paused DB to wake up
-        for param, val in [("ConnectRetryCount", "3"), ("ConnectRetryInterval", "10")]:
+        for param, val in [("ConnectRetryCount", "6"), ("ConnectRetryInterval", "10"), ("Connection Timeout", "60")]:
             if param.lower() not in azure_conn.lower():
                 azure_conn = azure_conn.rstrip(";") + f";{param}={val};"
         return f"mssql+pyodbc:///?odbc_connect={quote_plus(azure_conn)}"

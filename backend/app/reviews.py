@@ -64,7 +64,7 @@ def homepage_reviews():
             func.max(SongReview.updated_at).label("last_activity"),
         )
         .join(User, User.id == SongReview.user_id)
-        .filter(User.profile_public.is_(True), User.show_reviews.is_(True))
+        .filter(User.profile_public == True, User.show_reviews == True)
         .group_by(
             SongReview.item_hash,
             SongReview.item_key,
@@ -83,7 +83,7 @@ def homepage_reviews():
     recent_rows = (
         db.session.query(SongReview, User.username)
         .join(User, User.id == SongReview.user_id)
-        .filter(User.profile_public.is_(True), User.show_reviews.is_(True))
+        .filter(User.profile_public == True, User.show_reviews == True)
         .order_by(SongReview.updated_at.desc())
         .limit(5)
         .all()
@@ -92,7 +92,7 @@ def homepage_reviews():
     ratings_logged = (
         db.session.query(func.count(SongReview.id))
         .join(User, User.id == SongReview.user_id)
-        .filter(User.profile_public.is_(True), User.show_reviews.is_(True))
+        .filter(User.profile_public == True, User.show_reviews == True)
         .scalar()
         or 0
     )
@@ -100,15 +100,15 @@ def homepage_reviews():
         db.session.query(func.count(SongReview.id))
         .join(User, User.id == SongReview.user_id)
         .filter(
-            User.profile_public.is_(True),
-            User.show_reviews.is_(True),
+            User.profile_public == True,
+            User.show_reviews == True,
             SongReview.text.isnot(None),
             SongReview.text != "",
         )
         .scalar()
         or 0
     )
-    public_members = User.query.filter(User.profile_public.is_(True)).count()
+    public_members = User.query.filter(User.profile_public == True).count()
 
     top_items = [
         {

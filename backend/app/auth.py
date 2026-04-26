@@ -12,7 +12,6 @@ from sqlalchemy import or_
 
 from werkzeug.security import generate_password_hash
 
-from app.blob_storage import delete_blob_by_url, upload_profile_image
 from app.database import db
 from app.email_service import send_verification_code
 from app.models import FriendRequest, PendingVerification, User, utcnow_naive
@@ -27,6 +26,12 @@ _MAX_VERIFY_ATTEMPTS = 5
 
 def _generate_code() -> str:
     return f"{secrets.randbelow(1000000):06d}"
+
+
+def _blob_helpers():
+    from app.blob_storage import delete_blob_by_url, upload_profile_image
+
+    return delete_blob_by_url, upload_profile_image
 
 
 @auth_bp.post("/api/auth/signup")
@@ -274,6 +279,8 @@ def upload_profile_photo():
     if not u:
         return jsonify(ok=False, errors=["User not found."]), 404
 
+    delete_blob_by_url, upload_profile_image = _blob_helpers()
+
     old_url = u.profile_image_url
     url, err = upload_profile_image(u.id, f)
     if err:
@@ -292,6 +299,7 @@ def delete_profile_photo():
     if not u:
         return jsonify(ok=False, errors=["User not found."]), 404
 
+    delete_blob_by_url, _ = _blob_helpers()
     delete_blob_by_url(u.profile_image_url)
     u.profile_image_url = None
     db.session.commit()
@@ -387,6 +395,8 @@ def delete_account():
         pv.attempts = (pv.attempts or 0) + 1
         db.session.commit()
         return jsonify(ok=False, errors=["Incorrect verification code."]), 400
+
+    delete_blob_by_url, _ = _blob_helpers()
 
     user = db.session.get(User, current_user.id)
     delete_blob_by_url(user.profile_image_url if user else None)

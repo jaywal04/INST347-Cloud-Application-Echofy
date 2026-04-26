@@ -15,22 +15,35 @@
   <!-- HERO -->
   <div class="hero">
     <div class="hero-bg"></div>
-    <div class="hero-content">
-      <p class="hero-eyebrow">Your music. Your voice.</p>
-      <h1>Rate, review, and <em>own</em> your taste in music.</h1>
-      <p>Echofy is a social platform for music lovers who want more than an algorithm. Log what you've heard, share what you think, and connect with people who actually listen.</p>
-      <div class="hero-actions">
-        <a href="signup" class="btn-primary">Sign up for free</a>
-        <a href="#" class="btn-ghost">Browse reviews</a>
+    <div class="hero-shell">
+      <div class="hero-content">
+        <p class="hero-eyebrow">Your music. Your voice.</p>
+        <h1>Rate, review, and <em>own</em> your taste in music.</h1>
+        <p>Echofy is a social platform for music lovers who want more than an algorithm. Log what you've heard, share what you think, and connect with people who actually listen.</p>
+        <div class="hero-actions">
+          <a href="signup" class="btn-primary">Sign up for free</a>
+          <a href="#recent-reviews" class="btn-ghost">Browse reviews</a>
+        </div>
+
+        <div class="search-section">
+          <div class="search-wrap">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input id="hero-search-input" type="text" placeholder="Search artists, albums, songs…"/>
+            <button id="hero-search-button" type="button">Search</button>
+          </div>
+        </div>
       </div>
 
-      <div class="search-section">
-        <div class="search-wrap">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input type="text" placeholder="Search artists, albums, songs…"/>
-          <button>Search</button>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="hero-art-frame">
+          <img class="hero-art-image" src="assets/home-hero.jpeg" alt=""/>
+          <div class="hero-art-overlay"></div>
+          <div class="hero-art-caption">
+            <p class="hero-art-kicker">Community listening</p>
+            <p class="hero-art-title">See what music feels like when taste becomes social.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -41,176 +54,37 @@
   <!-- TRENDING ALBUMS -->
   <section>
     <div class="section-header">
-      <h2 class="section-title">Trending Albums</h2>
-      <a href="#" class="section-link">See all →</a>
+      <h2 class="section-title">Trending Right Now</h2>
+      <a href="discover.html" class="section-link">Open discover →</a>
     </div>
-    <div class="album-grid">
-
-      <div class="album-card">
-        <div class="album-art c1">
-          <div class="album-art-placeholder">🌊</div>
-          <div class="album-overlay"><button class="overlay-btn">+ Rate</button></div>
-        </div>
-        <div class="album-info">
-          <div class="album-title">Ocean Moves</div>
-          <div class="album-artist">The Coral Index</div>
-          <div class="album-rating">
-            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star empty">★</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="album-card">
-        <div class="album-art c2">
-          <div class="album-art-placeholder">🌙</div>
-          <div class="album-overlay"><button class="overlay-btn">+ Rate</button></div>
-        </div>
-        <div class="album-info">
-          <div class="album-title">Lunar Descent</div>
-          <div class="album-artist">Nara Voss</div>
-          <div class="album-rating">
-            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="album-card">
-        <div class="album-art c3">
-          <div class="album-art-placeholder">🌿</div>
-          <div class="album-overlay"><button class="overlay-btn">+ Rate</button></div>
-        </div>
-        <div class="album-info">
-          <div class="album-title">Verdant Hours</div>
-          <div class="album-artist">Moss & Echo</div>
-          <div class="album-rating">
-            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star empty">★</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="album-card">
-        <div class="album-art c4">
-          <div class="album-art-placeholder">🔥</div>
-          <div class="album-overlay"><button class="overlay-btn">+ Rate</button></div>
-        </div>
-        <div class="album-info">
-          <div class="album-title">Ember Tone</div>
-          <div class="album-artist">Carla Dusk</div>
-          <div class="album-rating">
-            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star empty">★</span><span class="star empty">★</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="album-card">
-        <div class="album-art c5">
-          <div class="album-art-placeholder">🎷</div>
-          <div class="album-overlay"><button class="overlay-btn">+ Rate</button></div>
-        </div>
-        <div class="album-info">
-          <div class="album-title">Late Brass</div>
-          <div class="album-artist">The Hollow Set</div>
-          <div class="album-rating">
-            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star empty">★</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="album-card">
-        <div class="album-art c6">
-          <div class="album-art-placeholder">❄️</div>
-          <div class="album-overlay"><button class="overlay-btn">+ Rate</button></div>
-        </div>
-        <div class="album-info">
-          <div class="album-title">Cold Signal</div>
-          <div class="album-artist">Auric Plains</div>
-          <div class="album-rating">
-            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
-          </div>
-        </div>
-      </div>
-
-    </div>
+    <p class="section-intro">Live picks from real ratings and reviews on Echofy.</p>
+    <div id="album-grid" class="album-grid"></div>
   </section>
 
   <hr class="section-divider"/>
 
   <!-- RECENT REVIEWS -->
-  <section>
+  <section id="recent-reviews">
     <div class="section-header">
       <h2 class="section-title">Recent Reviews</h2>
-      <a href="#" class="section-link">See all →</a>
+      <a href="discover.html" class="section-link">Rate music →</a>
     </div>
-
-    <div class="reviews-list">
-
-      <div class="review-item">
-        <div class="review-art c2">🌙</div>
-        <div class="review-body">
-          <div class="review-top">
-            <div class="avatar">JW</div>
-            <span class="review-user">jaywal</span>
-            <span class="review-action">reviewed</span>
-            <span class="review-album-name">Lunar Descent</span>
-            <div class="review-stars">
-              <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
-            </div>
-          </div>
-          <p class="review-text">One of those albums that completely changes your mood in the first 30 seconds. Every track feels intentional — nothing wasted, nothing out of place.</p>
-          <div class="review-time">2 hours ago</div>
-        </div>
-      </div>
-
-      <div class="review-item">
-        <div class="review-art c1">🌊</div>
-        <div class="review-body">
-          <div class="review-top">
-            <div class="avatar">AS</div>
-            <span class="review-user">aiden_s</span>
-            <span class="review-action">reviewed</span>
-            <span class="review-album-name">Ocean Moves</span>
-            <div class="review-stars">
-              <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star empty">★</span>
-            </div>
-          </div>
-          <p class="review-text">Really gorgeous production — the mix on the second half is flawless. Lost a star because the closer feels unfinished, but still an easy recommend.</p>
-          <div class="review-time">5 hours ago</div>
-        </div>
-      </div>
-
-      <div class="review-item">
-        <div class="review-art c6">❄️</div>
-        <div class="review-body">
-          <div class="review-top">
-            <div class="avatar">NB</div>
-            <span class="review-user">nbogin</span>
-            <span class="review-action">reviewed</span>
-            <span class="review-album-name">Cold Signal</span>
-            <div class="review-stars">
-              <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
-            </div>
-          </div>
-          <p class="review-text">Genre-defining. I genuinely didn't know ambient could hit this hard. Put this on during a late drive and didn't want to stop.</p>
-          <div class="review-time">Yesterday</div>
-        </div>
-      </div>
-
-    </div>
+    <div id="reviews-list" class="reviews-list"></div>
   </section>
 
   <!-- STATS -->
   <div class="stats-strip">
     <div class="stat-block">
-      <div class="stat-num">14,280</div>
-      <div class="stat-label">Albums Rated</div>
+      <div id="stats-ratings" class="stat-num">0</div>
+      <div class="stat-label">Ratings Logged</div>
     </div>
     <div class="stat-block">
-      <div class="stat-num">3,940</div>
+      <div id="stats-reviews" class="stat-num">0</div>
       <div class="stat-label">Reviews Written</div>
     </div>
     <div class="stat-block">
-      <div class="stat-num">1,120</div>
-      <div class="stat-label">Members</div>
+      <div id="stats-members" class="stat-num">0</div>
+      <div class="stat-label">Public Members</div>
     </div>
   </div>
 

@@ -2,6 +2,7 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
+  var route = window.ECHOFY_ROUTE || function (value) { return value; };
   var fetchOpts = { credentials: 'include' };
 
   // Get user ID from query string: /user?id=123
@@ -13,6 +14,7 @@
   var avatarEl = document.getElementById('user-avatar');
   var detailsEl = document.getElementById('user-details');
   var errorEl = document.getElementById('user-error');
+  var actionsEl = document.getElementById('user-actions');
 
   if (!userId) {
     usernameEl.textContent = 'User not found';
@@ -55,6 +57,20 @@
       // Username
       usernameEl.textContent = p.username;
       document.title = p.username + ' — Echofy';
+
+      if (actionsEl) {
+        actionsEl.innerHTML = '';
+        if (p.can_message) {
+          var messageLink = document.createElement('a');
+          messageLink.href = route('messages') + '?friend=' + encodeURIComponent(String(p.id));
+          messageLink.className = 'btn-primary';
+          messageLink.textContent = 'Direct message';
+          actionsEl.appendChild(messageLink);
+          actionsEl.hidden = false;
+        } else {
+          actionsEl.hidden = true;
+        }
+      }
 
       // Bio
       if (p.bio) {

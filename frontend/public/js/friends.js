@@ -2,6 +2,7 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
+  var route = window.ECHOFY_ROUTE || function (value) { return value; };
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
   var searchTimer = null;
 
@@ -62,7 +63,7 @@
       li.className = 'friends-card';
       var link = document.createElement('a');
       link.className = 'friends-card-link';
-      link.href = 'user?id=' + f.id;
+      link.href = route('user') + '?id=' + f.id;
       if (f.profile_image_url) {
         var img = document.createElement('img');
         img.className = 'friends-card-img';
@@ -79,7 +80,23 @@
       name.className = 'friends-card-name';
       name.textContent = f.username;
       link.appendChild(name);
+      var actions = document.createElement('div');
+      actions.className = 'friends-card-actions';
+
+      var profileBtn = document.createElement('a');
+      profileBtn.className = 'btn-ghost btn-sm';
+      profileBtn.href = route('user') + '?id=' + f.id;
+      profileBtn.textContent = 'View profile';
+
+      var messageBtn = document.createElement('a');
+      messageBtn.className = 'btn-primary btn-sm';
+      messageBtn.href = route('messages') + '?friend=' + f.id;
+      messageBtn.textContent = 'Direct message';
+
       li.appendChild(link);
+      actions.appendChild(profileBtn);
+      actions.appendChild(messageBtn);
+      li.appendChild(actions);
       ul.appendChild(li);
     });
   }

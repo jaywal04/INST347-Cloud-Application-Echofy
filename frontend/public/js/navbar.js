@@ -30,6 +30,7 @@
   var links = [
     { href: route('discover'), text: 'Discover' },
     { href: route('friends'), text: 'Friends' },
+    { href: route('messages'), text: 'Messages' },
     { href: route('echo'), text: 'Your Echo' },
   ];
 

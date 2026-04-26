@@ -9,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy import Boolean, DateTime, Integer, String, inspect, text
 from sqlalchemy.schema import Column
 
-from app.models import FriendRequest, PendingVerification, SongReview, User
+from app.models import DirectMessage, FriendRequest, PendingVerification, SavedSpotifyItem, SongReview, User
 
 
 def _quote_table_sqlite(name: str) -> str:
@@ -142,5 +142,7 @@ def ensure_model_table_columns(engine) -> None:
         PendingVerification.__table__,
         FriendRequest.__table__,
         SongReview.__table__,
+        SavedSpotifyItem.__table__,
+        DirectMessage.__table__,
     ):
         _ensure_table_columns(engine, table)

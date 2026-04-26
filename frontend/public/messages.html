@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Messages — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <div id="navbar"></div>
+  <script src="js/navbar.js"></script>
+
+  <div class="profile-page messages-page">
+    <div class="profile-header">
+      <div class="profile-header-info">
+        <h1 class="profile-username">Direct Messages</h1>
+        <p class="profile-meta">Chat with accepted friends and share music from your Echo.</p>
+      </div>
+    </div>
+
+    <div class="messages-layout">
+      <aside class="messages-sidebar">
+        <div class="messages-panel-header">
+          <h2 class="friends-section-title">Friends</h2>
+          <a class="section-link" href="friends">Back to friends →</a>
+        </div>
+        <p class="friends-section-desc">Only accepted friends can appear here or receive messages.</p>
+        <ul id="message-thread-list" class="messages-thread-list"></ul>
+        <p id="message-thread-empty" class="friends-hint">Accept a friend request to start messaging.</p>
+      </aside>
+
+      <section class="messages-conversation">
+        <div class="messages-panel-header">
+          <div>
+            <h2 class="friends-section-title" id="message-friend-name">Pick a friend</h2>
+            <p class="friends-section-desc" id="message-friend-subtitle">Choose an accepted friend to open your conversation.</p>
+          </div>
+        </div>
+
+        <div id="message-status" class="profile-msg" hidden></div>
+        <div id="message-list" class="messages-list">
+          <div class="echo-empty">No conversation selected yet.</div>
+        </div>
+
+        <form id="message-form" class="messages-composer" hidden>
+          <label class="messages-label" for="message-text">Message</label>
+          <textarea id="message-text" class="messages-textarea" rows="4" maxlength="2000" placeholder="Talk about what you're listening to..."></textarea>
+
+          <label class="messages-label" for="message-share-select">Share a saved song from Your Echo (optional)</label>
+          <select id="message-share-select" class="messages-select">
+            <option value="">No song selected</option>
+          </select>
+
+          <div id="message-share-preview" class="messages-share-preview" hidden></div>
+
+          <div class="messages-composer-actions">
+            <button type="submit" class="btn-primary" id="message-send-button">Send message</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span>&copy; 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/messages.js" defer></script>
+</body>
+</html>

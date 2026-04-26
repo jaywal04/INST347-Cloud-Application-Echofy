@@ -160,6 +160,67 @@ class SavedSpotifyItem(db.Model):
         }
 
 
+class DirectMessage(db.Model):
+    """One direct message between two accepted friends."""
+
+    __tablename__ = "direct_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
+    )
+    recipient_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
+    )
+    text = db.Column(db.String(2000), nullable=True)
+    shared_item_key = db.Column(db.String(1024), nullable=True)
+    shared_item_type = db.Column(db.String(20), nullable=True)
+    shared_name = db.Column(db.String(255), nullable=True)
+    shared_artists = db.Column(db.String(500), nullable=True)
+    shared_album = db.Column(db.String(255), nullable=True)
+    shared_image_url = db.Column(db.String(2048), nullable=True)
+    shared_spotify_url = db.Column(db.String(2048), nullable=True)
+    created_at = db.Column(db.DateTime, default=utcnow_naive, nullable=False, index=True)
+    read_at = db.Column(db.DateTime, nullable=True)
+
+    sender = db.relationship(
+        "User",
+        foreign_keys=[sender_id],
+        backref=db.backref("direct_messages_sent", lazy="dynamic"),
+    )
+    recipient = db.relationship(
+        "User",
+        foreign_keys=[recipient_id],
+        backref=db.backref("direct_messages_received", lazy="dynamic"),
+    )
+
+    def shared_item_dict(self) -> dict | None:
+        if not self.shared_name:
+            return None
+        artists = [a.strip() for a in (self.shared_artists or "").split(",") if a.strip()]
+        return {
+            "item_key": self.shared_item_key or "",
+            "type": self.shared_item_type or "track",
+            "name": self.shared_name,
+            "artists": artists,
+            "album": self.shared_album or "",
+            "image": self.shared_image_url or "",
+            "url": self.shared_spotify_url or "",
+        }
+
+    def to_dict(self, viewer_id: int | None = None) -> dict:
+        return {
+            "id": self.id,
+            "sender_id": self.sender_id,
+            "recipient_id": self.recipient_id,
+            "text": self.text or "",
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "read_at": self.read_at.isoformat() if self.read_at else None,
+            "is_mine": viewer_id is not None and self.sender_id == viewer_id,
+            "shared_item": self.shared_item_dict(),
+        }
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 

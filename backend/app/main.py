@@ -14,6 +14,7 @@ from app.auth import auth_bp
 from app.friends import friends_bp
 from app.database import init_db
 from app.envutil import first_non_empty
+from app.messages import messages_bp
 from app.models import User
 from app.reviews import reviews_bp
 from app.spotify_client import (
@@ -127,6 +128,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(friends_bp)
+    app.register_blueprint(messages_bp)
     app.register_blueprint(reviews_bp)
 
     @app.errorhandler(OperationalError)

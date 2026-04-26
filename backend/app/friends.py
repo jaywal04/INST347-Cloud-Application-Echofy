@@ -63,6 +63,7 @@ def public_profile(user_id: int):
         "id": user.id,
         "username": user.username,
         "profile_image_url": user.profile_image_url,
+        "can_message": _are_friends(current_user.id, user.id),
     }
 
     if user.show_bio:

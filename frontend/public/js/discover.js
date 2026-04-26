@@ -69,6 +69,12 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(shortlist.slice(0, 20)));
   }
 
+  function applyShortlistItems(items, persistLocal) {
+    shortlist = (items || []).slice(0, 20);
+    if (persistLocal !== false) saveShortlist();
+    renderShortlist();
+  }
+
   function itemKey(item) {
     return [
       item.type || 'track',
@@ -105,6 +111,40 @@
       });
   }
 
+  function normalizeSavedItem(entry) {
+    if (!entry) return null;
+    if (entry.item) {
+      return {
+        type: entry.item.type || 'track',
+        name: entry.item.name || '',
+        artists: entry.item.artists || [],
+        album: entry.item.album || '',
+        image: entry.item.image || '',
+        url: entry.item.url || '',
+      };
+    }
+    return entry;
+  }
+
+  function loadSavedItemsFromBackend() {
+    if (!API_BASE) return;
+
+    fetch(API_BASE + '/api/reviews/saved', fetchOpts)
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      })
+      .then(function (_ref) {
+        if (!_ref.ok) return;
+        applyShortlistItems((_ref.data.items || []).map(normalizeSavedItem).filter(Boolean), true);
+        refreshSaveButtons();
+      })
+      .catch(function (err) {
+        console.error('[Echofy] /api/reviews/saved fetch failed', err);
+      });
+  }
+
   function saveReviewToBackend(item, rating, text) {
     if (!API_BASE) {
       return Promise.resolve({
@@ -130,6 +170,51 @@
     });
   }
 
+  function saveTrackToBackend(item) {
+    if (!API_BASE) {
+      return Promise.resolve({
+        ok: false,
+        data: { errors: ['API base URL is not configured for this host.'] },
+      });
+    }
+
+    return fetch(API_BASE + '/api/reviews/saved', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_key: itemKey(item),
+        item: item,
+      }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok, status: res.status, data: data };
+      });
+    });
+  }
+
+  function removeTrackFromBackend(item) {
+    if (!API_BASE) {
+      return Promise.resolve({
+        ok: false,
+        data: { errors: ['API base URL is not configured for this host.'] },
+      });
+    }
+
+    return fetch(API_BASE + '/api/reviews/saved', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_key: itemKey(item),
+      }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok, status: res.status, data: data };
+      });
+    });
+  }
+
   function rememberItems(items) {
     items.forEach(function (item) {
       itemCache[itemKey(item)] = item;
@@ -146,19 +231,63 @@
   function addToShortlist(item) {
     if (isSaved(item)) return false;
     shortlist.unshift(item);
-    shortlist = shortlist.slice(0, 20);
-    saveShortlist();
-    renderShortlist();
+    applyShortlistItems(shortlist, true);
     return true;
   }
 
   function removeFromShortlist(item) {
     var key = itemKey(item);
-    shortlist = shortlist.filter(function (saved) {
+    applyShortlistItems(shortlist.filter(function (saved) {
       return itemKey(saved) !== key;
-    });
-    saveShortlist();
-    renderShortlist();
+    }), true);
+  }
+
+  function addToAccountShortlist(item) {
+    if (item.type !== 'track') {
+      if (surpriseStatusEl) surpriseStatusEl.textContent = 'Only tracks can be saved to Your Echo right now.';
+      return;
+    }
+
+    saveTrackToBackend(item)
+      .then(function (_ref) {
+        if (!_ref.ok) {
+          var message =
+            _ref.status === 401
+              ? 'Sign in before saving songs to Your Echo.'
+              : apiErrorText(_ref.data, 'Could not save this song.');
+          if (surpriseStatusEl) surpriseStatusEl.textContent = message;
+          return;
+        }
+
+        var savedItem = normalizeSavedItem(_ref.data.item);
+        if (savedItem && addToShortlist(savedItem)) {
+          if (surpriseStatusEl) surpriseStatusEl.textContent = 'Saved to Your Echo.';
+        } else if (surpriseStatusEl) {
+          surpriseStatusEl.textContent = 'Already saved in Your Echo.';
+        }
+        refreshSaveButtons();
+      })
+      .catch(function (err) {
+        console.error('[Echofy] /api/reviews/saved save failed', err);
+        if (surpriseStatusEl) surpriseStatusEl.textContent = 'Network error while saving this song.';
+      });
+  }
+
+  function removeFromAccountShortlist(item) {
+    removeTrackFromBackend(item)
+      .then(function (_ref) {
+        if (!_ref.ok) {
+          if (surpriseStatusEl) surpriseStatusEl.textContent = apiErrorText(_ref.data, 'Could not remove this song.');
+          return;
+        }
+        removeFromShortlist(item);
+        refreshSaveButtons();
+        if (surpriseStatusEl) surpriseStatusEl.textContent = 'Removed from Your Echo.';
+      })
+      .catch(function (err) {
+        console.error('[Echofy] /api/reviews/saved remove failed', err);
+        if (surpriseStatusEl) surpriseStatusEl.textContent = 'Network error while removing this song.';
+      });
   }
 
   function setLoading(loading) {
@@ -274,12 +403,14 @@
       genrePickBtn.setAttribute('data-genre-pick', item.genre_seed || item.name || '');
       actions.appendChild(genrePickBtn);
     } else {
-      var saveBtn = document.createElement('button');
-      saveBtn.type = 'button';
-      saveBtn.className = 'btn-ghost btn-sm';
-      saveBtn.textContent = opts.remove ? 'Remove' : isSaved(item) ? 'Saved' : 'Save';
-      saveBtn.setAttribute(opts.remove ? 'data-remove-item' : 'data-save-item', itemKey(item));
-      actions.appendChild(saveBtn);
+      if (item.type === 'track') {
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'btn-ghost btn-sm';
+        saveBtn.textContent = opts.remove ? 'Remove' : isSaved(item) ? 'Saved' : 'Save';
+        saveBtn.setAttribute(opts.remove ? 'data-remove-item' : 'data-save-item', itemKey(item));
+        actions.appendChild(saveBtn);
+      }
 
       var reviewBtn = document.createElement('button');
       reviewBtn.type = 'button';
@@ -493,11 +624,7 @@
     if (saveBtn) {
       var saveKey = saveBtn.getAttribute('data-save-item');
       var item = itemCache[saveKey];
-      if (item && addToShortlist(item)) {
-        saveBtn.textContent = 'Saved';
-        if (surpriseStatusEl) surpriseStatusEl.textContent = 'Added to your shortlist.';
-      }
-      refreshSaveButtons();
+      if (item) addToAccountShortlist(item);
       return;
     }
 
@@ -507,8 +634,7 @@
       var saved = shortlist.find(function (candidate) {
         return itemKey(candidate) === removeKey;
       });
-      if (saved) removeFromShortlist(saved);
-      refreshSaveButtons();
+      if (saved) removeFromAccountShortlist(saved);
       return;
     }
 
@@ -807,4 +933,5 @@
 
   renderShortlist();
   loadReviewsFromBackend();
+  loadSavedItemsFromBackend();
 })();

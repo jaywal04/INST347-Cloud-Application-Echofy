@@ -4,6 +4,17 @@
   // --- Config (inline so navbar is self-contained) ---
   var host = window.location.hostname;
   var API_BASE;
+  var isLocal = host === 'localhost' || host === '127.0.0.1';
+  function route(value) {
+    var raw = String(value || '').trim();
+    if (!raw || raw === '#') return raw;
+    if (/^(https?:)?\/\//.test(raw) || raw.indexOf('#') === 0) return raw;
+    if (raw === '/') return isLocal ? '/index.html' : '/';
+    if (!isLocal) return raw;
+    if (raw.slice(-5) === '.html') return raw;
+    if (raw.indexOf('/') !== -1) return raw;
+    return raw + '.html';
+  }
   if (host === 'localhost' || host === '127.0.0.1') {
     API_BASE = 'http://127.0.0.1:5001';
   } else {
@@ -17,16 +28,16 @@
   var page = raw || '/';
 
   var links = [
-    { href: 'discover', text: 'Discover' },
-    { href: 'friends', text: 'Friends' },
-    { href: '#', text: 'Your Echo' },
+    { href: route('discover'), text: 'Discover' },
+    { href: route('friends'), text: 'Friends' },
+    { href: route('echo'), text: 'Your Echo' },
   ];
 
   var nav = document.createElement('nav');
 
   var logo = document.createElement('a');
   logo.className = 'logo';
-  logo.href = '/';
+  logo.href = route('/');
   logo.innerHTML = 'Echo<span>fy</span>';
 
   var ul = document.createElement('ul');
@@ -66,7 +77,7 @@
     .then(function (data) {
       if (!data.authenticated || !data.user) {
         var signIn = document.createElement('a');
-        signIn.href = 'login';
+        signIn.href = route('login');
         signIn.className = 'nav-cta';
         signIn.textContent = 'Sign In';
         authDiv.appendChild(signIn);
@@ -78,7 +89,7 @@
       var initials = u.username.substring(0, 2).toUpperCase();
 
       var bellLink = document.createElement('a');
-      bellLink.href = 'notifications';
+      bellLink.href = route('notifications');
       bellLink.className = 'nav-notif-link';
       bellLink.title = 'Notifications';
       bellLink.innerHTML =
@@ -88,7 +99,7 @@
         '</svg>';
 
       var profileLink = document.createElement('a');
-      profileLink.href = 'profile';
+      profileLink.href = route('profile');
       profileLink.className = 'nav-profile-link';
       if (u.profile_image_url) {
         var img = document.createElement('img');

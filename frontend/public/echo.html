@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Your Echo — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <div id="navbar"></div>
+  <script src="js/navbar.js"></script>
+
+  <main class="echo-page">
+    <header class="echo-hero">
+      <p class="hero-eyebrow discover-eyebrow">Your Echo</p>
+      <h1 class="discover-title">Your saved music and latest takes</h1>
+      <p class="discover-lead">Come back to the songs you kept and the reviews you have written most recently.</p>
+    </header>
+
+    <section class="echo-grid">
+      <article class="echo-panel">
+        <div class="discover-panel-head">
+          <h2 class="section-title discover-panel-title">Recent reviews</h2>
+          <p class="discover-panel-desc">Your latest ratings and written notes, all in one place.</p>
+        </div>
+        <div id="echo-reviews" class="echo-review-list"></div>
+      </article>
+
+      <article class="echo-panel">
+        <div class="discover-panel-head">
+          <h2 class="section-title discover-panel-title">Saved songs</h2>
+          <p class="discover-panel-desc">Tracks you saved from Discover so you can revisit them later.</p>
+        </div>
+        <div id="echo-saved" class="spotify-results"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="/">Home</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+
+  <script src="js/echo.js" defer></script>
+</body>
+</html>

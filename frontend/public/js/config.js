@@ -9,9 +9,29 @@
   'use strict';
 
   var host = window.location.hostname;
+  var isLocal = host === 'localhost' || host === '127.0.0.1';
 
-  if (host === 'localhost' || host === '127.0.0.1') {
+  function routeHref(route) {
+    var value = String(route || '').trim();
+    if (!value || value === '#') return value;
+    if (/^(https?:)?\/\//.test(value) || value.indexOf('#') === 0) return value;
+    if (value === '/') return isLocal ? '/index.html' : '/';
+    if (!isLocal) return value;
+    if (value.slice(-5) === '.html') return value;
+    if (value.indexOf('/') !== -1) return value;
+    return value + '.html';
+  }
+
+  window.ECHOFY_ROUTE = routeHref;
+
+  if (isLocal) {
     window.ECHOFY_API_BASE = 'http://127.0.0.1:5001';
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('a[href]').forEach(function (anchor) {
+        var href = anchor.getAttribute('href');
+        anchor.setAttribute('href', routeHref(href));
+      });
+    });
     return;
   }
 

@@ -72,6 +72,8 @@
     nav.classList.add('ready');
   }
 
+  reveal();
+
   fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
     .then(function (res) { return res.json(); })
     .then(function (data) {

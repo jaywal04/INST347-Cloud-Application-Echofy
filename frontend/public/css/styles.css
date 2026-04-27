@@ -947,6 +947,10 @@ footer a:hover { color: var(--accent); }
   flex-wrap: wrap;
 }
 
+.spotify-review-delete {
+  color: #c6d3f5;
+}
+
 .spotify-empty {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -1404,6 +1408,16 @@ footer a:hover { color: var(--accent); }
   gap: 16px;
 }
 
+.echo-feedback {
+  margin: 0 0 14px;
+  color: #8fb0ff;
+  font-size: 0.94rem;
+}
+
+.echo-feedback.is-error {
+  color: #ffb7c0;
+}
+
 .echo-review-card {
   border: 1px solid rgba(93, 132, 221, 0.18);
   border-radius: 16px;
@@ -1455,6 +1469,16 @@ footer a:hover { color: var(--accent); }
 .echo-review-date {
   margin-top: 12px;
   font-size: 0.9rem;
+}
+
+.echo-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.echo-review-delete {
+  min-width: 0;
 }
 
 .echo-saved-date {

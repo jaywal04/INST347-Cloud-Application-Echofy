@@ -5,8 +5,14 @@
   var route = window.ECHOFY_ROUTE || function (value) { return value; };
   var reviewsEl = document.getElementById('echo-reviews');
   var savedEl = document.getElementById('echo-saved');
+  var reviewStatusEl = document.createElement('p');
+  var reviewItems = [];
 
   if (!reviewsEl || !savedEl || !API_BASE) return;
+
+  reviewStatusEl.className = 'echo-feedback';
+  reviewStatusEl.hidden = true;
+  reviewsEl.parentNode.insertBefore(reviewStatusEl, reviewsEl);
 
   function fetchJson(path) {
     return fetch(API_BASE + path, { credentials: 'include' }).then(function (res) {
@@ -42,6 +48,7 @@
   }
 
   function renderReviews(reviews) {
+    reviewItems = (reviews || []).slice();
     if (!reviews.length) {
       renderReviewEmpty('You have not written any reviews yet. Rate a track on Discover and it will show up here.');
       return;
@@ -80,11 +87,49 @@
       date.className = 'echo-review-date';
       date.textContent = formatDate(review.updated_at);
 
+      var actions = document.createElement('div');
+      actions.className = 'echo-review-actions';
+
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn-ghost btn-sm echo-review-delete';
+      remove.textContent = 'Delete rating';
+      remove.setAttribute('data-delete-review', review.item_key || '');
+
+      actions.appendChild(remove);
+
       card.appendChild(top);
       card.appendChild(meta);
       card.appendChild(body);
       card.appendChild(date);
+      card.appendChild(actions);
       reviewsEl.appendChild(card);
+    });
+  }
+
+  function setReviewStatus(message, isError) {
+    if (!message) {
+      reviewStatusEl.hidden = true;
+      reviewStatusEl.textContent = '';
+      reviewStatusEl.classList.remove('is-error');
+      return;
+    }
+
+    reviewStatusEl.hidden = false;
+    reviewStatusEl.textContent = message;
+    reviewStatusEl.classList.toggle('is-error', !!isError);
+  }
+
+  function deleteReview(itemKeyValue) {
+    return fetch(API_BASE + '/api/reviews', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_key: itemKeyValue }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok, status: res.status, data: data };
+      });
     });
   }
 
@@ -182,4 +227,43 @@
       renderReviewEmpty('Could not load your recent reviews right now.');
       renderSavedEmpty('Could not load your saved songs right now.');
     });
+
+  reviewsEl.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-delete-review]');
+    if (!button) return;
+
+    var itemKeyValue = button.getAttribute('data-delete-review') || '';
+    if (!itemKeyValue) return;
+
+    setReviewStatus('');
+    button.disabled = true;
+    button.textContent = 'Deleting...';
+
+    deleteReview(itemKeyValue)
+      .then(function (_ref) {
+        if (!_ref.ok) {
+          var message =
+            _ref.status === 401
+              ? 'Sign in again before editing reviews in Your Echo.'
+              : ((_ref.data && _ref.data.errors && _ref.data.errors[0]) || 'Could not delete this rating right now.');
+          setReviewStatus(message, true);
+          return;
+        }
+
+        reviewItems = reviewItems.filter(function (review) {
+          return review.item_key !== itemKeyValue;
+        });
+        renderReviews(reviewItems);
+        setReviewStatus('Rating removed from Your Echo.');
+      })
+      .catch(function () {
+        setReviewStatus('Network error while deleting this rating.', true);
+      })
+      .finally(function () {
+        if (document.body.contains(button)) {
+          button.disabled = false;
+          button.textContent = 'Delete rating';
+        }
+      });
+  });
 })();

@@ -283,3 +283,29 @@ def upsert_review():
 
     db.session.commit()
     return jsonify(ok=True, review=review.to_dict())
+
+
+@reviews_bp.delete("")
+@login_required
+def delete_review():
+    data = request.get_json(silent=True) or {}
+    item_key = _clean_string(data.get("item_key"), 1024)
+    if not item_key:
+        item = data.get("item") or {}
+        if isinstance(item, dict):
+            item_key = _item_key(item)
+
+    if not item_key:
+        return jsonify(ok=False, errors=["Item key is required."]), 400
+
+    item_hash = _hash_key(item_key)
+    review = SongReview.query.filter_by(
+        user_id=current_user.id,
+        item_hash=item_hash,
+    ).first()
+    if review is None:
+        return jsonify(ok=True)
+
+    db.session.delete(review)
+    db.session.commit()
+    return jsonify(ok=True)

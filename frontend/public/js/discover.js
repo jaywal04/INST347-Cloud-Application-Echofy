@@ -170,6 +170,28 @@
     });
   }
 
+  function deleteReviewFromBackend(item) {
+    if (!API_BASE) {
+      return Promise.resolve({
+        ok: false,
+        data: { errors: ['API base URL is not configured for this host.'] },
+      });
+    }
+
+    return fetch(API_BASE + '/api/reviews', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_key: itemKey(item),
+      }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok, status: res.status, data: data };
+      });
+    });
+  }
+
   function saveTrackToBackend(item) {
     if (!API_BASE) {
       return Promise.resolve({
@@ -492,7 +514,51 @@
       form.remove();
     });
 
+    var remove = null;
+    if (review.id || review.item_key) {
+      remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn-ghost btn-sm spotify-review-delete';
+      remove.textContent = 'Delete review';
+      remove.addEventListener('click', function () {
+        remove.disabled = true;
+        remove.textContent = 'Deleting...';
+        save.disabled = true;
+        cancel.disabled = true;
+
+        deleteReviewFromBackend(item)
+          .then(function (_ref) {
+            if (!_ref.ok) {
+              var message =
+                _ref.status === 401
+                  ? 'Sign in before managing reviews in your account.'
+                  : apiErrorText(_ref.data, 'Could not delete review.');
+              if (surpriseStatusEl) surpriseStatusEl.textContent = message;
+              return;
+            }
+
+            delete reviews[itemKey(item)];
+            updateReviewSummary(row, item);
+            form.remove();
+            if (surpriseStatusEl) surpriseStatusEl.textContent = 'Review removed from your account.';
+          })
+          .catch(function (err) {
+            console.error('[Echofy] /api/reviews delete failed', err);
+            if (surpriseStatusEl) surpriseStatusEl.textContent = 'Network error while deleting review.';
+          })
+          .finally(function () {
+            if (remove) {
+              remove.disabled = false;
+              remove.textContent = 'Delete review';
+            }
+            save.disabled = false;
+            cancel.disabled = false;
+          });
+      });
+    }
+
     actions.appendChild(save);
+    if (remove) actions.appendChild(remove);
     actions.appendChild(cancel);
     form.appendChild(ratingLabel);
     form.appendChild(reviewLabel);

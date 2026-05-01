@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import os
 import secrets
+import sys
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 from dotenv import load_dotenv
@@ -32,6 +35,7 @@ _ENV_FILE = _ROOT / ".env"
 
 SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_OAUTH_SCOPE = "user-top-read"
+_spotify_redirect_port_warning_shown = False
 
 
 def _load_dotenv_compat(path: Path) -> None:
@@ -67,19 +71,63 @@ def _strip_env_quotes(value: str) -> str:
 
 
 def _spotify_redirect_uri() -> str:
+    """
+    Must match Spotify Dashboard and this server's PORT. Many clones still have
+    SPOTIFY_REDIRECT_URI=...:5000 in .env while the app listens on 5001 — Spotify
+    would then send the browser to a dead port. For localhost / 127.0.0.1 we align
+    the callback port to PORT automatically.
+    """
+    global _spotify_redirect_port_warning_shown
+    listen_port = int(os.environ.get("PORT", str(PORT)))
     raw = first_non_empty("SPOTIFY_REDIRECT_URI", "SPOTIPY_REDIRECT_URI")
-    if raw:
-        return _strip_env_quotes(raw)
-    return "http://127.0.0.1:5001/callback"
+    if not raw:
+        return f"http://localhost:{listen_port}/callback"
+    uri = _strip_env_quotes(raw)
+    parsed = urlparse(uri)
+    host = (parsed.hostname or "").lower()
+    if host not in ("127.0.0.1", "localhost"):
+        return uri
+    if parsed.port == listen_port:
+        return uri
+    scheme = parsed.scheme or "http"
+    hn = parsed.hostname or "localhost"
+    netloc = f"{hn}:{listen_port}"
+    path = parsed.path or "/callback"
+    fixed = urlunparse((scheme, netloc, path, "", "", ""))
+    if not _spotify_redirect_port_warning_shown:
+        _spotify_redirect_port_warning_shown = True
+        print(
+            "[echofy] SPOTIFY_REDIRECT_URI port does not match this server PORT="
+            f"{listen_port}. Using {fixed} for Spotify OAuth. Add that exact URI in the "
+            "Spotify Developer Dashboard (and set SPOTIFY_REDIRECT_URI in .env to match).",
+            file=sys.stderr,
+        )
+    return fixed
 
 
 def _oauth_success_url() -> str:
     return _strip_env_quotes(
         os.environ.get(
             "ECHOFY_OAUTH_SUCCESS_URL",
-            "http://127.0.0.1:3001/discover?spotify=connected",
+            "http://localhost:3001/discover?spotify=connected",
         )
     )
+
+
+def _discover_redirect_url(**query_updates: str) -> str:
+    """Build Discover URL using same scheme/host/path as ECHOFY_OAUTH_SUCCESS_URL."""
+    p = urlparse(_oauth_success_url())
+    path = (p.path or "/discover").split("?")[0] or "/discover"
+    merged = dict(parse_qsl(p.query, keep_blank_values=True))
+    for key, value in query_updates.items():
+        if value:
+            merged[key] = value
+        else:
+            merged.pop(key, None)
+    if "spotify_error" in query_updates:
+        merged.pop("spotify", None)
+    q = urlencode(merged)
+    return urlunparse((p.scheme, p.netloc, path, "", q, ""))
 
 
 def create_app() -> Flask:
@@ -87,8 +135,21 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = os.environ.get(
         "FLASK_SECRET_KEY", "dev-echofy-change-me-for-production"
     )
-    app.config["SESSION_COOKIE_SAMESITE"] = "None"
-    app.config["SESSION_COOKIE_SECURE"] = not app.debug
+    # Local dev is HTTP. Secure=True + SameSite=None breaks the session cookie in the
+    # browser (no cookie → Spotify OAuth tokens never stick). Cross-origin SWA + API
+    # on HTTPS needs None + Secure — production: ECHOFY_PRODUCTION=1, FLASK_ENV=production,
+    # or Azure App Service (WEBSITE_HOSTNAME is always set there).
+    _prod_session = (
+        os.environ.get("ECHOFY_PRODUCTION", "").strip().lower() in ("1", "true", "yes")
+        or os.environ.get("FLASK_ENV", "").strip().lower() == "production"
+        or bool(os.environ.get("WEBSITE_HOSTNAME", "").strip())
+    )
+    if _prod_session:
+        app.config["SESSION_COOKIE_SAMESITE"] = "None"
+        app.config["SESSION_COOKIE_SECURE"] = True
+    else:
+        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+        app.config["SESSION_COOKIE_SECURE"] = False
     app.config["SESSION_COOKIE_HTTPONLY"] = True
 
     cors_origins = [
@@ -152,14 +213,29 @@ def create_app() -> Flask:
             connected=bool(session.get("spotify_access_token")),
         )
 
+    @app.post("/api/spotify/disconnect")
+    def spotify_disconnect():
+        session.pop("spotify_access_token", None)
+        session.pop("spotify_refresh_token", None)
+        session.pop("spotify_oauth_state", None)
+        return jsonify(ok=True, connected=False)
+
+    def _persist_spotify_session_tokens(access: str, new_refresh: str | None) -> None:
+        session["spotify_access_token"] = access
+        if new_refresh:
+            session["spotify_refresh_token"] = new_refresh
+
     @app.get("/api/spotify/top-tracks")
     def spotify_top_tracks():
         oauth_tok = session.get("spotify_access_token") or ""
+        refresh_tok = session.get("spotify_refresh_token") or ""
         payload, status = fetch_top_tracks_for_response(
             client_id=_spotify_client_id(),
             client_secret=_spotify_client_secret(),
             legacy_user_token=_spotify_legacy_user_token(),
             oauth_access_token=oauth_tok,
+            oauth_refresh_token=refresh_tok,
+            on_token_refresh=_persist_spotify_session_tokens,
         )
         return jsonify(payload), status
 
@@ -227,7 +303,10 @@ def create_app() -> Flask:
     def spotify_oauth_callback():
         err = request.args.get("error")
         if err:
-            return jsonify(error=err, description=request.args.get("error_description", "")), 400
+            desc = (request.args.get("error_description") or "").strip()
+            return redirect(
+                _discover_redirect_url(spotify_error=err, spotify_error_description=desc)
+            )
 
         code = request.args.get("code")
         state = request.args.get("state")
@@ -235,7 +314,12 @@ def create_app() -> Flask:
         session.pop("spotify_oauth_state", None)
 
         if not code or not state or state != expected:
-            return jsonify(error="invalid_state", message="OAuth state mismatch. Try signing in again."), 400
+            return redirect(
+                _discover_redirect_url(
+                    spotify_error="invalid_state",
+                    spotify_error_description="OAuth state mismatch. Close this tab and use Connect Spotify again.",
+                )
+            )
 
         client_id = _spotify_client_id()
         client_secret = _spotify_client_secret()

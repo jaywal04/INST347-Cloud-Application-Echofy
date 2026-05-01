@@ -8,6 +8,8 @@ Usage:
     python admin.py
 """
 
+from __future__ import annotations
+
 import os
 import sys
 from textwrap import indent
@@ -16,7 +18,7 @@ from textwrap import indent
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from flask import Flask
-from sqlalchemy import inspect, or_, text
+from sqlalchemy import func, inspect, or_, text
 
 from app.database import apply_remote_db_engine_options, db, _build_database_uri
 from app.models import FriendRequest, User
@@ -32,6 +34,19 @@ def create_admin_app():
 
 
 app = create_admin_app()
+
+
+def _resolve_user(identifier: str) -> User | None:
+    """Look up a user by numeric ID, email (case-insensitive), or username."""
+    s = (identifier or "").strip()
+    if not s:
+        return None
+    if s.isdigit():
+        return User.query.get(int(s))
+    if "@" in s:
+        return User.query.filter(func.lower(User.email) == s.lower()).first()
+    return User.query.filter_by(username=s).first()
+
 
 MENU = """
 ============================================
@@ -119,14 +134,11 @@ def list_users():
 
 
 def view_user():
-    identifier = input("\n  Enter user ID or username: ").strip()
+    identifier = input("\n  Enter user ID, username, or email: ").strip()
     if not identifier:
         return
 
-    if identifier.isdigit():
-        user = User.query.get(int(identifier))
-    else:
-        user = User.query.filter_by(username=identifier).first()
+    user = _resolve_user(identifier)
 
     if not user:
         print(f"  User '{identifier}' not found.")
@@ -150,14 +162,11 @@ def view_user():
 
 
 def delete_user():
-    identifier = input("\n  Enter user ID or username to delete: ").strip()
+    identifier = input("\n  Enter user ID, username, or email to delete: ").strip()
     if not identifier:
         return
 
-    if identifier.isdigit():
-        user = User.query.get(int(identifier))
-    else:
-        user = User.query.filter_by(username=identifier).first()
+    user = _resolve_user(identifier)
 
     if not user:
         print(f"  User '{identifier}' not found.")
@@ -229,14 +238,11 @@ def run_query():
 
 
 def reset_password():
-    identifier = input("\n  Enter user ID or username: ").strip()
+    identifier = input("\n  Enter user ID, username, or email: ").strip()
     if not identifier:
         return
 
-    if identifier.isdigit():
-        user = User.query.get(int(identifier))
-    else:
-        user = User.query.filter_by(username=identifier).first()
+    user = _resolve_user(identifier)
 
     if not user:
         print(f"  User '{identifier}' not found.")

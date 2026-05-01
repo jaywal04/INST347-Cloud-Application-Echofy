@@ -18,6 +18,13 @@ class CleanURLHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(DIRECTORY), **kwargs)
 
+    def handle(self):
+        # Client closed the socket before a full request (common on Windows / browsers).
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def do_GET(self):
         # Separate path from query string
         if "?" in self.path:

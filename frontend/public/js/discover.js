@@ -9,6 +9,7 @@
   var resultsEl = document.getElementById('spotify-results');
   var connectLink = document.getElementById('spotify-connect-link');
   var connectedBadge = document.getElementById('spotify-connected-badge');
+  var disconnectBtn = document.getElementById('spotify-disconnect-btn');
   var searchForm = document.getElementById('spotify-search-form');
   var searchInput = document.getElementById('spotify-search-input');
   var searchStatusEl = document.getElementById('spotify-search-status');
@@ -39,23 +40,106 @@
     connectLink.href = API_BASE + '/auth/spotify';
   }
 
-  if (API_BASE && connectedBadge) {
+  function updateSpotifyConnectionUi(connected) {
+    if (connectLink) connectLink.hidden = !!connected;
+    if (connectedBadge) connectedBadge.hidden = !connected;
+    if (disconnectBtn) disconnectBtn.hidden = !connected;
+  }
+
+  var oauthJustConnected = false;
+  try {
+    oauthJustConnected = new URLSearchParams(window.location.search).get('spotify') === 'connected';
+  } catch (e) {}
+
+  // OAuth success adds ?spotify=connected — show badge even when /api/spotify/session
+  // does not see the cookie yet (common on dev: localhost:3001 → localhost:5001 partitioning).
+  if (oauthJustConnected) {
+    updateSpotifyConnectionUi(true);
+  }
+  if (oauthJustConnected && statusEl) {
+    statusEl.textContent =
+      'Spotify connected. Use “Show top Spotify music” for your top tracks (or the chart if none).';
+  }
+  if (oauthJustConnected && window.history && window.history.replaceState) {
+    try {
+      var cleanParams = new URLSearchParams(window.location.search);
+      cleanParams.delete('spotify');
+      var nextPath = window.location.pathname + (cleanParams.toString() ? '?' + cleanParams.toString() : '');
+      window.history.replaceState({}, '', nextPath);
+    } catch (e2) {}
+  }
+
+  if (API_BASE && (connectedBadge || disconnectBtn)) {
     fetch(API_BASE + '/api/spotify/session', fetchOpts)
       .then(function (r) {
         return r.json();
       })
       .then(function (data) {
         if (data.connected) {
-          connectedBadge.hidden = false;
+          updateSpotifyConnectionUi(true);
+        } else if (!oauthJustConnected) {
+          updateSpotifyConnectionUi(false);
         }
       })
       .catch(function () {});
   }
 
-  if (window.location.search.indexOf('spotify=connected') !== -1 && statusEl) {
-    statusEl.textContent =
-      'Spotify connected. Use “Show top Spotify music” for your top tracks (or the chart if none).';
+  if (disconnectBtn && API_BASE) {
+    disconnectBtn.addEventListener('click', function () {
+      disconnectBtn.disabled = true;
+      fetch(API_BASE + '/api/spotify/disconnect', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+        .then(function (r) {
+          return r.json().then(function (data) {
+            return { ok: r.ok, data: data };
+          });
+        })
+        .then(function (ref) {
+          if (!ref.ok || !ref.data.ok) {
+            if (statusEl) statusEl.textContent = 'Could not disconnect Spotify. Try again.';
+            return;
+          }
+          updateSpotifyConnectionUi(false);
+          if (statusEl) {
+            statusEl.textContent =
+              'Spotify disconnected. You can connect again anytime for personalized top tracks.';
+          }
+        })
+        .catch(function () {
+          if (statusEl) statusEl.textContent = 'Network error while disconnecting.';
+        })
+        .finally(function () {
+          disconnectBtn.disabled = false;
+        });
+    });
   }
+
+  (function showSpotifyOAuthErrorFromUrl() {
+    if (!statusEl) return;
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('spotify_error');
+      if (!code) return;
+      var desc = (params.get('spotify_error_description') || '').trim();
+      var human =
+        code === 'server_error'
+          ? 'Spotify had a temporary problem (server_error). Wait a minute and try Connect Spotify again, or check status.spotify.com.'
+          : code === 'access_denied'
+            ? 'Spotify login was cancelled.'
+            : 'Spotify login did not finish (' + code + ').';
+      statusEl.textContent = human + (desc ? ' ' + desc : '');
+      if (window.history && window.history.replaceState) {
+        params.delete('spotify_error');
+        params.delete('spotify_error_description');
+        var next = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState({}, '', next);
+      }
+    } catch (e) {}
+  })();
 
   function loadShortlist() {
     try {
@@ -191,6 +275,8 @@
       return 'Featured: ' + data.playlist_name + ' (Spotify)';
     }
     if (source === 'featured_playlist') return 'Featured playlist (Spotify)';
+    if (source === 'search_explore') return 'Explore tracks (Spotify search)';
+    if (source === 'genre_recommendations') return 'Genre mix (Spotify)';
     return 'Spotify';
   }
 
@@ -687,14 +773,15 @@
         }
 
         currentItems = tracks;
-        statusEl.textContent = '';
+        statusEl.textContent = data.spotify_session_note || '';
         renderItems(resultsEl, sourceLabel(data.source, data), tracks);
         btn.setAttribute('aria-expanded', 'true');
         refreshSaveButtons();
       })
       .catch(function (err) {
         console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
-        statusEl.textContent = 'Network error. Is the backend running on http://127.0.0.1:5001 ?';
+        statusEl.textContent =
+          'Network error. Is the backend running on ' + (API_BASE || 'http://localhost:5001') + ' ?';
       })
       .finally(function () {
         setLoading(false);

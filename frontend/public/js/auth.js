@@ -176,7 +176,11 @@
           showVerifyStep(ref.data.email || email);
         })
         .catch(function () {
-          showError('Network error. Is the backend running on http://127.0.0.1:5001?');
+          showError(
+            'Network error. Is the backend running on ' +
+              (window.ECHOFY_API_BASE || 'http://localhost:5001') +
+              '?'
+          );
         })
         .finally(function () {
           btn.disabled = false;
@@ -300,7 +304,11 @@
           window.location.href = 'discover';
         })
         .catch(function () {
-          showError('Network error. Is the backend running on http://127.0.0.1:5001?');
+          showError(
+            'Network error. Is the backend running on ' +
+              (window.ECHOFY_API_BASE || 'http://localhost:5001') +
+              '?'
+          );
         })
         .finally(function () {
           btn.disabled = false;

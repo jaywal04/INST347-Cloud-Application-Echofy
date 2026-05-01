@@ -26,6 +26,20 @@
   var playlistsEl = document.getElementById('spotify-playlists');
 
   var fetchOpts = { credentials: 'include' };
+
+  function spotifyOAuthConnectUrl() {
+    if (!API_BASE) return '';
+    try {
+      return (
+        API_BASE +
+        '/auth/spotify?return=' +
+        encodeURIComponent(window.location.origin)
+      );
+    } catch (e) {
+      return API_BASE + '/auth/spotify';
+    }
+  }
+
   var selectedSearchType = 'track';
   var currentItems = [];
   var itemCache = {};
@@ -41,7 +55,7 @@
   if (!btn && !searchForm) return;
 
   if (connectLink && API_BASE) {
-    connectLink.href = API_BASE + '/auth/spotify';
+    connectLink.href = spotifyOAuthConnectUrl();
   }
 
   function renderPlaylistCard(playlist) {
@@ -199,7 +213,7 @@
               ref.data.error === 'spotify_forbidden'
             ) {
               var reconnectLink = document.createElement('a');
-              reconnectLink.href = API_BASE + '/auth/spotify';
+              reconnectLink.href = spotifyOAuthConnectUrl();
               reconnectLink.textContent =
                 ref.data.error === 'spotify_forbidden'
                   ? ' Reconnect Spotify (needed after new permissions) →'
@@ -288,7 +302,7 @@
         connectLink.removeAttribute('aria-hidden');
       }
       if (!connected && API_BASE) {
-        connectLink.href = API_BASE + '/auth/spotify';
+        connectLink.href = spotifyOAuthConnectUrl();
       }
     }
     if (connectedBadge) connectedBadge.hidden = !connected;
@@ -348,8 +362,6 @@
       fetch(API_BASE + '/api/spotify/disconnect', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
       })
         .then(function (r) {
           return r.json().then(function (data) {

@@ -132,8 +132,61 @@ def _oauth_success_url(
         return _strip_env_quotes(raw)
     if username:
         safe = quote(username, safe="")
+        for origin in _echofy_cors_allowed_origins():
+            if origin.startswith("https://") and "localhost" not in origin:
+                return f"{origin.rstrip('/')}/{safe}/discovery?spotify=connected"
         return f"http://{frontend_host}:3001/{safe}/discovery?spotify=connected"
+    for origin in _echofy_cors_allowed_origins():
+        if origin.startswith("https://") and "localhost" not in origin:
+            return f"{origin.rstrip('/')}/discover?spotify=connected"
     return f"http://{frontend_host}:3001/discover?spotify=connected"
+
+
+def _echofy_cors_allowed_origins() -> list[str]:
+    """Origins allowed for credentialed browser requests (SWA + local dev)."""
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(origin: str) -> None:
+        o = (origin or "").strip().rstrip("/")
+        if not o:
+            return
+        if not o.startswith("http"):
+            o = "https://" + o
+        if o in seen:
+            return
+        seen.add(o)
+        out.append(o)
+
+    add("http://localhost:3001")
+    add("http://127.0.0.1:3001")
+    for env_key in (
+        "ECHOFY_SWA_URL",
+        "ECHOFY_CORS_ORIGINS",
+        "ECHOFY_FRONTEND_ORIGINS",
+    ):
+        for part in os.environ.get(env_key, "").split(","):
+            add(part)
+    oauth_full = os.environ.get("ECHOFY_OAUTH_SUCCESS_URL", "").strip()
+    if oauth_full:
+        p = urlparse(_strip_env_quotes(oauth_full))
+        if p.scheme in ("http", "https") and p.netloc:
+            add(f"{p.scheme}://{p.netloc}")
+
+    return out
+
+
+def _oauth_return_origin_allowed(return_url: str) -> bool:
+    """Reject open redirects: return= must match a configured CORS origin."""
+    try:
+        p = urlparse((return_url or "").strip())
+        if p.scheme not in ("http", "https") or not p.netloc:
+            return False
+        candidate = f"{p.scheme}://{p.netloc}".rstrip("/")
+    except Exception:
+        return False
+    allowed = {o.rstrip("/") for o in _echofy_cors_allowed_origins()}
+    return candidate in allowed
 
 
 def _discover_redirect_url(
@@ -178,24 +231,16 @@ def create_app() -> Flask:
         app.config["SESSION_COOKIE_SECURE"] = False
     app.config["SESSION_COOKIE_HTTPONLY"] = True
 
-    cors_origins = [
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ]
-    # Allow the Azure Static Web Apps frontend in production (comma-separated).
+    # SWA / custom domain must be listed or credentialed POST (e.g. disconnect) preflight fails.
+    cors_origins = _echofy_cors_allowed_origins()
     backend_url = os.environ.get("ECHOFY_BACKEND_URL", "").strip()
-    for origin in os.environ.get("ECHOFY_SWA_URL", "").split(","):
-        origin = origin.strip()
-        if not origin:
-            continue
-        if not origin.startswith("http"):
-            origin = "https://" + origin
-        cors_origins.append(origin)
 
     CORS(
         app,
         origins=cors_origins,
         supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     )
 
     # --- Database & Auth ---
@@ -235,8 +280,10 @@ def create_app() -> Flask:
 
     @app.get("/api/spotify/session")
     def spotify_session():
-        if current_user.is_authenticated and current_user.spotify_access_token:
-            return jsonify(connected=True)
+        if current_user.is_authenticated:
+            u = db.session.get(User, current_user.id)
+            if u and (u.spotify_access_token or u.spotify_refresh_token):
+                return jsonify(connected=True)
         return jsonify(connected=bool(session.get("spotify_access_token")))
 
     @app.get("/api/spotify/playlists")
@@ -366,12 +413,19 @@ def create_app() -> Flask:
 
         state = secrets.token_urlsafe(32)
         frontend_host = (request.host or "").split(":")[0].lower() or "localhost"
+        return_origin = ""
+        ret = (request.args.get("return") or "").strip()
+        if ret and _oauth_return_origin_allowed(ret):
+            rp = urlparse(ret)
+            if rp.scheme in ("http", "https") and rp.netloc:
+                return_origin = f"{rp.scheme}://{rp.netloc}".rstrip("/")
         _oauth_state_map[state] = {
             "user_id": current_user.id if current_user.is_authenticated else None,
             "frontend_host": frontend_host,
             "username": (
                 current_user.username if current_user.is_authenticated else None
             ),
+            "return_origin": return_origin,
         }
         params = {
             "client_id": client_id,
@@ -479,6 +533,12 @@ def create_app() -> Flask:
             if data.get("refresh_token"):
                 session["spotify_refresh_token"] = data["refresh_token"]
 
+        ro = ((entry or {}).get("return_origin") or "").strip().rstrip("/")
+        if ro:
+            if username_for_redirect:
+                safe = quote(username_for_redirect, safe="")
+                return redirect(f"{ro}/{safe}/discovery?spotify=connected")
+            return redirect(f"{ro}/discover?spotify=connected")
         return redirect(_oauth_success_url(frontend_host, username_for_redirect))
 
     return app

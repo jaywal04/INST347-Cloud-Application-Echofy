@@ -778,6 +778,129 @@ def search_spotify_for_response(
     )
 
 
+def fetch_playlist_tracks_for_response(
+    oauth_access_token: str = "",
+    playlist_id: str = "",
+    limit: int = 100,
+) -> tuple[dict[str, Any], int]:
+    """Fetch up to `limit` tracks from a playlist. Requires a user OAuth token."""
+    token = (oauth_access_token or "").strip()
+    pid = (playlist_id or "").strip()
+    if not token:
+        return ({"error": "no_user_token", "message": "Connect your Spotify account first."}, 401)
+    if not pid:
+        return ({"error": "missing_playlist_id", "message": "Playlist ID is required."}, 400)
+
+    cap = min(max(1, limit), 100)
+    res = requests.get(
+        f"{SPOTIFY_API}/playlists/{pid}/tracks",
+        headers=_headers(token),
+        params={"limit": cap, "fields": "items(track(name,artists,album,external_urls,images,is_local)),total,next"},
+        timeout=_REQUEST_TIMEOUT,
+    )
+
+    if res.status_code == 401:
+        return ({"error": "token_expired", "message": "Spotify session expired. Reconnect your account."}, 401)
+    if res.status_code == 403:
+        return ({"error": "insufficient_scope", "message": "Missing playlist scope. Reconnect Spotify."}, 403)
+    if res.status_code == 404:
+        return ({"error": "not_found", "message": "Playlist not found or is private."}, 404)
+    if res.status_code != 200:
+        try:
+            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+        except Exception:
+            detail = res.text[:200]
+        return ({"error": "spotify_api_error", "message": "Could not load playlist tracks.", "detail": detail}, 502)
+
+    body = res.json()
+    total = body.get("total", 0)
+    tracks = []
+    for row in body.get("items") or []:
+        t = _normalize_track(row.get("track") or {})
+        if t:
+            tracks.append(t)
+
+    return ({"tracks": tracks, "total": total, "returned": len(tracks)}, 200)
+
+
+def fetch_user_playlists_for_response(
+    oauth_access_token: str = "",
+    limit: int = 50,
+) -> tuple[dict[str, Any], int]:
+    """
+    Fetch the current user's playlists via /v1/me/playlists.
+    Requires a user OAuth token with playlist-read-private scope.
+    """
+    token = (oauth_access_token or "").strip()
+    if not token:
+        return (
+            {
+                "error": "no_user_token",
+                "message": "Connect your Spotify account to view your playlists.",
+            },
+            401,
+        )
+
+    res = requests.get(
+        f"{SPOTIFY_API}/me/playlists",
+        headers=_headers(token),
+        params={"limit": min(limit, 50)},
+        timeout=_REQUEST_TIMEOUT,
+    )
+
+    if res.status_code == 401:
+        return (
+            {
+                "error": "token_expired",
+                "message": "Spotify session expired. Disconnect and reconnect your Spotify account.",
+            },
+            401,
+        )
+
+    if res.status_code == 403:
+        return (
+            {
+                "error": "insufficient_scope",
+                "message": "Missing playlist-read-private permission. Disconnect and reconnect Spotify to grant access.",
+            },
+            403,
+        )
+
+    if res.status_code != 200:
+        try:
+            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+        except Exception:
+            detail = res.text[:200]
+        return (
+            {
+                "error": "spotify_api_error",
+                "message": "Could not load playlists from Spotify.",
+                "detail": detail,
+            },
+            502,
+        )
+
+    playlists = []
+    for p in res.json().get("items") or []:
+        if not p:
+            continue
+        images = p.get("images") or []
+        image_url = next((img.get("url") for img in images if img.get("url")), None)
+        playlists.append({
+            "id": p.get("id") or "",
+            "name": p.get("name") or "Untitled Playlist",
+            "description": p.get("description") or "",
+            "image": image_url,
+            "track_count": (p.get("tracks") or {}).get("total", 0),
+            "owner": (p.get("owner") or {}).get("display_name") or "",
+            "url": (p.get("external_urls") or {}).get("spotify") or "",
+            "public": p.get("public", False),
+            "collaborative": p.get("collaborative", False),
+        })
+
+    return ({"playlists": playlists, "total": len(playlists)}, 200)
+
+
 def recommend_tracks_for_genre_response(
     client_id: str = "",
     client_secret: str = "",

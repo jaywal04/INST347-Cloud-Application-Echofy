@@ -134,6 +134,8 @@ class User(UserMixin, db.Model):
     show_bio = db.Column(db.Boolean, default=True, nullable=False)
     show_genre = db.Column(db.Boolean, default=True, nullable=False)
     profile_image_url = db.Column(db.String(2048), nullable=True)
+    spotify_access_token = db.Column(db.String(512), nullable=True)
+    spotify_refresh_token = db.Column(db.String(512), nullable=True)
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)

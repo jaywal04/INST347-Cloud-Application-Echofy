@@ -25,7 +25,7 @@
         <p class="discover-panel-desc">Load Spotify’s Global Top 50 chart, or connect your account to see your top tracks. Client ID, secret, and tokens stay on the server.</p>
       </div>
       <p class="discover-oauth-row">
-        <a class="btn-ghost discover-connect-link" id="spotify-connect-link" href="#">Connect Spotify account</a>
+        <a class="btn-ghost discover-connect-link" id="spotify-connect-link" href="#" hidden>Connect Spotify account</a>
         <span class="discover-connected" id="spotify-connected-badge" hidden>Spotify connected</span>
         <button type="button" class="btn-ghost btn-sm" id="spotify-disconnect-btn" hidden>Disconnect Spotify</button>
       </p>
@@ -34,6 +34,15 @@
       </button>
       <p class="discover-hint" id="spotify-status" role="status"></p>
       <div class="spotify-results" id="spotify-results" hidden></div>
+
+      <div class="discover-divider" id="playlists-divider" hidden></div>
+
+      <div class="discover-panel-head" id="playlists-panel-head" hidden>
+        <h2 class="section-title discover-panel-title">Your Playlists</h2>
+        <p class="discover-panel-desc">Playlists from your connected Spotify account.</p>
+      </div>
+      <p class="discover-hint" id="playlists-status" role="status"></p>
+      <div class="spotify-results" id="spotify-playlists" hidden></div>
 
       <div class="discover-divider"></div>
 

@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError, ResourceNotFoundError
-from azure.storage.blob import BlobServiceClient, ContentSettings, PublicAccess
+from azure.storage.blob import (
+    BlobSasPermissions,
+    BlobServiceClient,
+    ContentSettings,
+    PublicAccess,
+    generate_blob_sas,
+)
 
 CONN_ENV = "AZURE_STORAGE_CONNECTION_STRING"
 CONTAINER_ENV = "AZURE_STORAGE_CONTAINER_PROFILES"
@@ -30,6 +37,61 @@ def get_blob_service() -> BlobServiceClient | None:
     if not conn:
         return None
     return BlobServiceClient.from_connection_string(conn)
+
+
+def _account_name_key_from_connection_string(conn: str) -> tuple[str, str] | None:
+    """Return (account_name, account_key) for SAS signing, or None if not a key-based string."""
+    parts: dict[str, str] = {}
+    for segment in conn.split(";"):
+        segment = segment.strip()
+        if "=" not in segment:
+            continue
+        k, v = segment.split("=", 1)
+        parts[k.strip().lower()] = v.strip()
+    name = parts.get("accountname")
+    key = parts.get("accountkey")
+    if name and key:
+        return name, key
+    return None
+
+
+def signed_profile_image_url(url: str | None) -> str | None:
+    """
+    Append a time-limited read SAS for our profile container blobs so <img src> works
+    when the storage account disallows anonymous public access (Azure default).
+    """
+    if not url:
+        return None
+    base = url.split("?", 1)[0].strip()
+    if not base:
+        return None
+    conn = os.environ.get(CONN_ENV, "").strip()
+    if not conn:
+        return url
+    creds = _account_name_key_from_connection_string(conn)
+    if not creds:
+        return url
+    account_name, account_key = creds
+    parsed = urlparse(base)
+    path = (parsed.path or "").lstrip("/")
+    if "/" not in path:
+        return url
+    container_name, blob_name = path.split("/", 1)
+    if container_name.lower() != profiles_container_name().lower():
+        return url
+    expiry = datetime.now(timezone.utc) + timedelta(days=30)
+    try:
+        token = generate_blob_sas(
+            account_name=account_name,
+            container_name=container_name,
+            blob_name=blob_name,
+            account_key=account_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=expiry,
+        )
+    except Exception:
+        return url
+    return f"{parsed.scheme}://{parsed.netloc}/{path}?{token}"
 
 
 def ensure_profiles_container(service: BlobServiceClient) -> tuple[bool, str]:
@@ -129,6 +191,7 @@ def upload_profile_image(user_id: int, file_storage) -> tuple[str | None, str]:
 def delete_blob_by_url(url: str | None) -> None:
     if not url:
         return
+    url = url.split("?", 1)[0]
     service = get_blob_service()
     if not service:
         return

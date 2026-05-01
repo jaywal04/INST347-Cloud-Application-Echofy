@@ -12,7 +12,11 @@ from sqlalchemy import or_
 
 from werkzeug.security import generate_password_hash
 
-from app.blob_storage import delete_blob_by_url, upload_profile_image
+from app.blob_storage import (
+    delete_blob_by_url,
+    signed_profile_image_url,
+    upload_profile_image,
+)
 from app.database import db
 from app.email_service import send_verification_code
 from app.models import FriendRequest, PendingVerification, User, utcnow_naive
@@ -229,7 +233,9 @@ def me():
             user={
                 "id": current_user.id,
                 "username": current_user.username,
-                "profile_image_url": current_user.profile_image_url,
+                "profile_image_url": signed_profile_image_url(
+                    current_user.profile_image_url
+                ),
             },
         )
     return jsonify(authenticated=False), 200
@@ -253,7 +259,7 @@ def get_profile():
         "show_reviews": u.show_reviews,
         "show_bio": u.show_bio,
         "show_genre": u.show_genre,
-        "profile_image_url": u.profile_image_url,
+        "profile_image_url": signed_profile_image_url(u.profile_image_url),
     })
 
 
@@ -317,7 +323,7 @@ def upload_profile_photo():
     u.profile_image_url = url
     db.session.commit()
     delete_blob_by_url(old_url)
-    return jsonify(ok=True, profile_image_url=url)
+    return jsonify(ok=True, profile_image_url=signed_profile_image_url(url))
 
 
 @auth_bp.delete("/api/auth/profile/photo")

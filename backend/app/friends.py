@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy import and_, func, or_
 
+from app.blob_storage import signed_profile_image_url
 from app.database import db
 from app.models import FriendRequest, User, utcnow_naive
 
@@ -47,7 +48,7 @@ def _user_summary(u: User) -> dict:
     return {
         "id": u.id,
         "username": u.username,
-        "profile_image_url": u.profile_image_url,
+        "profile_image_url": signed_profile_image_url(u.profile_image_url),
     }
 
 
@@ -62,7 +63,7 @@ def public_profile(user_id: int):
     profile = {
         "id": user.id,
         "username": user.username,
-        "profile_image_url": user.profile_image_url,
+        "profile_image_url": signed_profile_image_url(user.profile_image_url),
     }
 
     if user.show_bio:

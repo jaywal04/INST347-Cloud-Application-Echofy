@@ -347,21 +347,36 @@ def _resolve_spotify_token(
 def _playlist_tracks_payload(
     access_token: str, playlist_id: str, *, market: str | None
 ) -> tuple[list[dict[str, Any]] | None, str]:
-    """Returns (tracks_list, error_detail). tracks_list None if request failed or empty."""
-    m = (market or "").strip().upper()
-    if len(m) != 2 or not m.isalpha():
-        m = _spotify_iso_market()
-    params: dict[str, Any] = {
+    """Returns (tracks_list, error_detail). tracks_list None if request failed or empty.
+
+    ``market=None`` means omit the ``market`` query parameter (Spotify chart + client
+    credentials often return 403 Forbidden when a market is forced). A non-None string
+    uses that ISO market if valid, otherwise ``SPOTIFY_MARKET`` / default.
+    """
+    base_params: dict[str, Any] = {
         "limit": 30,
         "additional_types": "episode,track",
-        "market": m,
     }
-    pl = requests.get(
-        f"{SPOTIFY_API}/playlists/{playlist_id}/items",
-        headers=_headers(access_token),
-        params=params,
-        timeout=_REQUEST_TIMEOUT,
-    )
+    params = dict(base_params)
+    if market is not None:
+        m = (market or "").strip().upper()
+        if len(m) != 2 or not m.isalpha():
+            m = _spotify_iso_market()
+        if len(m) == 2 and m.isalpha():
+            params["market"] = m
+
+    def _get(pl_params: dict[str, Any]) -> requests.Response:
+        return requests.get(
+            f"{SPOTIFY_API}/playlists/{playlist_id}/items",
+            headers=_headers(access_token),
+            params=pl_params,
+            timeout=_REQUEST_TIMEOUT,
+        )
+
+    pl = _get(params)
+    if pl.status_code == 403 and "market" in params:
+        pl = _get(dict(base_params))
+
     if pl.status_code != 200:
         try:
             detail = pl.json().get("error", {}).get("message", "") or pl.text[:200]
@@ -833,16 +848,29 @@ def _get_playlist_items_first_page(
     playlist_id: str, access_token: str, page_limit: int
 ) -> requests.Response:
     """GET /v1/playlists/{id}/items (current API; /tracks is legacy)."""
-    return requests.get(
-        f"{SPOTIFY_API}/playlists/{playlist_id}/items",
+    url = f"{SPOTIFY_API}/playlists/{playlist_id}/items"
+    base: dict[str, Any] = {
+        "limit": min(100, max(1, page_limit)),
+        "additional_types": "episode,track",
+    }
+    params = dict(base)
+    m = _spotify_iso_market()
+    if len(m) == 2 and m.isalpha():
+        params["market"] = m
+    res = requests.get(
+        url,
         headers=_headers(access_token),
-        params={
-            "limit": min(100, max(1, page_limit)),
-            "additional_types": "episode,track",
-            "market": _spotify_iso_market(),
-        },
+        params=params,
         timeout=_REQUEST_TIMEOUT,
     )
+    if res.status_code == 403 and "market" in params:
+        res = requests.get(
+            url,
+            headers=_headers(access_token),
+            params=dict(base),
+            timeout=_REQUEST_TIMEOUT,
+        )
+    return res
 
 
 def fetch_playlist_tracks_for_response(

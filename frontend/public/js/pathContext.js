@@ -27,6 +27,27 @@
   window.ECHOFY_PATH_USERNAME = '';
   window.ECHOFY_USER_BASE = '';
 
+  var stashed =
+    typeof sessionStorage !== 'undefined' &&
+    sessionStorage.getItem('echofy_prefixed_path');
+  if (stashed) {
+    try {
+      var u = new URL(stashed, window.location.origin);
+      if (
+        /^\/[^/]+\/(dashboard|discover|friends|profile|notifications|user)(?:\/|$)/.test(
+          u.pathname
+        )
+      ) {
+        try {
+          history.replaceState(null, '', stashed);
+        } catch (e) {}
+      }
+    } catch (e2) {}
+    try {
+      sessionStorage.removeItem('echofy_prefixed_path');
+    } catch (e3) {}
+  }
+
   var parts = window.location.pathname.split('/').filter(Boolean);
   if (
     parts.length >= 2 &&

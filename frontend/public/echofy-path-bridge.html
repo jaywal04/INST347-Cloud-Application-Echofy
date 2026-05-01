@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Echofy</title>
+  <script>
+    (function () {
+      var path = location.pathname;
+      var search = location.search || '';
+      var m = path.match(
+        /^\/([^/]+)\/(dashboard|discover|friends|profile|notifications|user)(?:\/|$)/
+      );
+      if (!m) {
+        window.location.replace('/');
+        return;
+      }
+      var map = {
+        dashboard: 'discover',
+        discover: 'discover',
+        friends: 'friends',
+        profile: 'profile',
+        notifications: 'notifications',
+        user: 'user',
+      };
+      var file = map[m[2]];
+      if (!file) {
+        window.location.replace('/');
+        return;
+      }
+      try {
+        sessionStorage.setItem('echofy_prefixed_path', path + search);
+      } catch (e) {}
+      window.location.replace('/' + file + '.html' + search);
+    })();
+  </script>
+</head>
+<body></body>
+</html>

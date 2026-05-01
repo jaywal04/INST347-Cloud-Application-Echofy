@@ -31,6 +31,7 @@ jobs:
           app_location: "frontend/public" # Static site (HTML/CSS/JS)
           api_location: "" # Set to "api" when Azure Functions are added
           output_location: "" # No build step; deploy frontend/public as-is
+          skip_app_build: true # No package.json; skip Oryx platform detection
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:

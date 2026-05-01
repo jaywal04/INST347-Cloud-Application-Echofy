@@ -1,10 +1,15 @@
 {
   "routes": [
-    { "route": "/*/dashboard", "rewrite": "/discover.html" },
-    { "route": "/*/discover", "rewrite": "/discover.html" },
-    { "route": "/*/friends", "rewrite": "/friends.html" },
-    { "route": "/*/profile", "rewrite": "/profile.html" },
-    { "route": "/*/notifications", "rewrite": "/notifications.html" },
-    { "route": "/*/user", "rewrite": "/user.html" }
-  ]
+    { "route": "/login*", "rewrite": "/login.html" },
+    { "route": "/signup*", "rewrite": "/signup.html" },
+    { "route": "/discover*", "rewrite": "/discover.html" },
+    { "route": "/friends*", "rewrite": "/friends.html" },
+    { "route": "/profile*", "rewrite": "/profile.html" },
+    { "route": "/notifications*", "rewrite": "/notifications.html" },
+    { "route": "/user*", "rewrite": "/user.html" }
+  ],
+  "navigationFallback": {
+    "rewrite": "/echofy-path-bridge.html",
+    "exclude": ["/css/*", "/js/*", "/.auth/*"]
+  }
 }

@@ -164,6 +164,8 @@ def _echofy_cors_allowed_origins() -> list[str]:
         "ECHOFY_SWA_URL",
         "ECHOFY_CORS_ORIGINS",
         "ECHOFY_FRONTEND_ORIGINS",
+        "ECHOFY_ALLOWED_ORIGINS",
+        "ECHOFY_FRONTEND_URL",
     ):
         for part in os.environ.get(env_key, "").split(","):
             add(part)

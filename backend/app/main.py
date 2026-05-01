@@ -132,7 +132,7 @@ def _oauth_success_url(
         return _strip_env_quotes(raw)
     if username:
         safe = quote(username, safe="")
-        return f"http://{frontend_host}:3001/{safe}/dashboard?spotify=connected"
+        return f"http://{frontend_host}:3001/{safe}/discovery?spotify=connected"
     return f"http://{frontend_host}:3001/discover?spotify=connected"
 
 
@@ -141,7 +141,7 @@ def _discover_redirect_url(
     username: str | None = None,
     **query_updates: str,
 ) -> str:
-    """Build post-OAuth frontend URL (dashboard under username when logged in)."""
+    """Build post-OAuth frontend URL (discovery / Discover page under username when logged in)."""
     p = urlparse(_oauth_success_url(frontend_host, username))
     path = (p.path or "/discover").split("?")[0] or "/discover"
     merged = dict(parse_qsl(p.query, keep_blank_values=True))

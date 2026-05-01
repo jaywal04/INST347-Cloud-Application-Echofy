@@ -16,6 +16,7 @@
 
   var STATIC_FIRST_SEGMENTS = { css: 1, js: 1, assets: 1, fonts: 1 };
   var APP_PAGES = {
+    discovery: 1,
     dashboard: 1,
     discover: 1,
     friends: 1,
@@ -34,7 +35,7 @@
     try {
       var u = new URL(stashed, window.location.origin);
       if (
-        /^\/[^/]+\/(dashboard|discover|friends|profile|notifications|user)(?:\/|$)/.test(
+        /^\/[^/]+\/(discovery|dashboard|discover|friends|profile|notifications|user)(?:\/|$)/.test(
           u.pathname
         )
       ) {

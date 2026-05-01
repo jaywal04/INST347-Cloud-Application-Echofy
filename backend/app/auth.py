@@ -27,6 +27,7 @@ _RESERVED_USERNAMES = frozenset(
         "login",
         "signup",
         "discover",
+        "discovery",
         "dashboard",
         "friends",
         "profile",

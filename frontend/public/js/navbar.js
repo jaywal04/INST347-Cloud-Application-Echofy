@@ -39,10 +39,6 @@
     nav.classList.add('ready');
   }
 
-  function userHomePath(username) {
-    return '/' + encodeURIComponent(username) + '/dashboard';
-  }
-
   function appendNavLinks(links) {
     ul.innerHTML = '';
     links.forEach(function (link) {
@@ -66,9 +62,12 @@
 
     appendNavLinks([
       {
-        href: base + '/dashboard',
+        href: base + '/discovery',
         text: 'Discover',
-        active: activeSeg === 'dashboard' || activeSeg === 'discover',
+        active:
+          activeSeg === 'discovery' ||
+          activeSeg === 'dashboard' ||
+          activeSeg === 'discover',
       },
       { href: base + '/friends', text: 'Friends', active: activeSeg === 'friends' },
       { href: '#', text: 'Your Echo', active: false },
@@ -78,7 +77,9 @@
   function buildPublicNav() {
     var pathParts = window.location.pathname.split('/').filter(Boolean);
     var p0 = (pathParts[0] || '').toLowerCase();
-    var activeDiscover = pathParts.length === 1 && (p0 === 'discover' || p0 === 'dashboard');
+    var activeDiscover =
+      pathParts.length === 1 &&
+      (p0 === 'discover' || p0 === 'discovery' || p0 === 'dashboard');
     var activeFriends = pathParts.length === 1 && p0 === 'friends';
     appendNavLinks([
       { href: '/discover', text: 'Discover', active: activeDiscover },
@@ -109,7 +110,6 @@
       var initials = u.username.substring(0, 2).toUpperCase();
       var base = '/' + encodeURIComponent(u.username);
 
-      logo.href = userHomePath(u.username);
       buildMainNav(u.username);
 
       var bellLink = document.createElement('a');
@@ -151,6 +151,21 @@
       authDiv.innerHTML = '';
       authDiv.appendChild(bellLink);
       authDiv.appendChild(profileLink);
+
+      var heroSignup = document.getElementById('hero-signup-link');
+      if (heroSignup) {
+        heroSignup.remove();
+      }
+
+      var heroTitle = document.getElementById('hero-title');
+      if (heroTitle && u.username) {
+        heroTitle.innerHTML = '';
+        heroTitle.appendChild(document.createTextNode('Welcome back, '));
+        var nameEm = document.createElement('em');
+        nameEm.textContent = u.username;
+        heroTitle.appendChild(nameEm);
+      }
+
       reveal();
 
       fetch(API_BASE + '/api/notifications/count', { credentials: 'include' })

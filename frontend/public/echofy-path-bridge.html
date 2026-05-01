@@ -8,13 +8,14 @@
       var path = location.pathname;
       var search = location.search || '';
       var m = path.match(
-        /^\/([^/]+)\/(dashboard|discover|friends|profile|notifications|user)(?:\/|$)/
+        /^\/([^/]+)\/(discovery|dashboard|discover|friends|profile|notifications|user)(?:\/|$)/
       );
       if (!m) {
         window.location.replace('/');
         return;
       }
       var map = {
+        discovery: 'discover',
         dashboard: 'discover',
         discover: 'discover',
         friends: 'friends',

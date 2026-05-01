@@ -219,10 +219,10 @@
             showVerifyError(ref.data.errors || ['Verification failed.']);
             return;
           }
-          // Success — account created, redirect to username dashboard
+          // Success — account created, redirect to username discovery (Discover page)
           var un = (ref.data.user && ref.data.user.username) || '';
           window.location.href = un
-            ? '/' + encodeURIComponent(un) + '/dashboard'
+            ? '/' + encodeURIComponent(un) + '/discovery'
             : '/discover';
         })
         .catch(function () {
@@ -306,7 +306,7 @@
           }
           var logged = (ref.data.user && ref.data.user.username) || '';
           window.location.href = logged
-            ? '/' + encodeURIComponent(logged) + '/dashboard'
+            ? '/' + encodeURIComponent(logged) + '/discovery'
             : '/discover';
         })
         .catch(function () {

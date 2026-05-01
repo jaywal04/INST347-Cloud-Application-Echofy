@@ -34,7 +34,7 @@
     genre: 'Search genres like afrobeat, house, or indie...',
   };
 
-  if (!btn || !statusEl || !resultsEl) return;
+  if (!btn && !searchForm) return;
 
   if (connectLink && API_BASE) {
     connectLink.href = API_BASE + '/auth/spotify';
@@ -246,6 +246,7 @@
   }
 
   function setLoading(loading) {
+    if (!btn) return;
     btn.disabled = loading;
     btn.textContent = loading ? 'Loading...' : 'Show top Spotify music';
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
@@ -730,63 +731,65 @@
       });
   }
 
-  btn.addEventListener('click', function () {
-    if (!API_BASE) {
-      statusEl.textContent = 'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
-      return;
-    }
+  if (btn && statusEl && resultsEl) {
+    btn.addEventListener('click', function () {
+      if (!API_BASE) {
+        statusEl.textContent = 'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
+        return;
+      }
 
-    setLoading(true);
-    statusEl.textContent = '';
-    resultsEl.hidden = true;
-    resultsEl.innerHTML = '';
+      setLoading(true);
+      statusEl.textContent = '';
+      resultsEl.hidden = true;
+      resultsEl.innerHTML = '';
 
-    fetch(API_BASE + '/api/spotify/top-tracks', fetchOpts)
-      .then(function (res) {
-        return res.json().then(function (data) {
-          return { ok: res.ok, status: res.status, data: data };
+      fetch(API_BASE + '/api/spotify/top-tracks', fetchOpts)
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, status: res.status, data: data };
+          });
+        })
+        .then(function (_ref) {
+          var ok = _ref.ok;
+          var data = _ref.data;
+
+          console.log('[Echofy] Spotify /api/spotify/top-tracks', {
+            httpStatus: _ref.status,
+            ok: ok,
+            payload: data,
+            trackCount: data && data.tracks ? data.tracks.length : 0,
+          });
+
+          if (!ok) {
+            statusEl.textContent = apiErrorText(
+              data,
+              'Could not load Spotify data. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env and restart the backend.'
+            );
+            return;
+          }
+
+          var tracks = data.tracks || [];
+          if (!tracks.length) {
+            statusEl.textContent = 'Spotify returned no tracks.';
+            return;
+          }
+
+          currentItems = tracks;
+          statusEl.textContent = data.spotify_session_note || '';
+          renderItems(resultsEl, sourceLabel(data.source, data), tracks);
+          btn.setAttribute('aria-expanded', 'true');
+          refreshSaveButtons();
+        })
+        .catch(function (err) {
+          console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
+          statusEl.textContent =
+            'Network error. Is the backend running on ' + (API_BASE || 'http://localhost:5001') + ' ?';
+        })
+        .finally(function () {
+          setLoading(false);
         });
-      })
-      .then(function (_ref) {
-        var ok = _ref.ok;
-        var data = _ref.data;
-
-        console.log('[Echofy] Spotify /api/spotify/top-tracks', {
-          httpStatus: _ref.status,
-          ok: ok,
-          payload: data,
-          trackCount: data && data.tracks ? data.tracks.length : 0,
-        });
-
-        if (!ok) {
-          statusEl.textContent = apiErrorText(
-            data,
-            'Could not load Spotify data. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env and restart the backend.'
-          );
-          return;
-        }
-
-        var tracks = data.tracks || [];
-        if (!tracks.length) {
-          statusEl.textContent = 'Spotify returned no tracks.';
-          return;
-        }
-
-        currentItems = tracks;
-        statusEl.textContent = data.spotify_session_note || '';
-        renderItems(resultsEl, sourceLabel(data.source, data), tracks);
-        btn.setAttribute('aria-expanded', 'true');
-        refreshSaveButtons();
-      })
-      .catch(function (err) {
-        console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
-        statusEl.textContent =
-          'Network error. Is the backend running on ' + (API_BASE || 'http://localhost:5001') + ' ?';
-      })
-      .finally(function () {
-        setLoading(false);
-      });
-  });
+    });
+  }
 
   searchTypeButtons.forEach(function (typeBtn) {
     typeBtn.addEventListener('click', function () {
@@ -806,6 +809,7 @@
   if (searchForm) {
     searchForm.addEventListener('submit', function (event) {
       event.preventDefault();
+      if (!searchStatusEl || !searchResultsEl || !searchInput) return;
       if (!API_BASE) {
         searchStatusEl.textContent = 'API base URL is not configured for this host.';
         return;

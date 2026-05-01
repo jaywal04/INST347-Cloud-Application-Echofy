@@ -26,13 +26,17 @@
       </div>
 
       <div class="search-section">
-        <div class="search-wrap">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <form class="discover-search-form" id="spotify-search-form">
+          <div class="search-wrap">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input type="text" placeholder="Search artists, albums, songs…"/>
-          <button>Search</button>
-        </div>
+            </svg>
+            <input type="search" id="spotify-search-input" placeholder="Search artists, albums, songs..." autocomplete="off"/>
+            <button type="submit">Search</button>
+          </div>
+        </form>
+        <p class="discover-hint home-search-status" id="spotify-search-status" role="status"></p>
+        <div class="spotify-results home-search-results" id="spotify-search-results" hidden></div>
       </div>
     </div>
   </div>
@@ -228,5 +232,6 @@
   <script src="js/config.js"></script>
 
   <script src="js/main.js" defer></script>
+  <script src="js/discover.js" defer></script>
 </body>
 </html>

@@ -116,8 +116,9 @@ def _headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token.strip()}"}
 
 
-def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
-    if not item or item.get("is_local"):
+def _normalize_catalog_track(item: dict[str, Any]) -> dict[str, Any] | None:
+    """Map a Spotify track object to Echofy item shape (non-local, catalog)."""
+    if not item:
         return None
     album = item.get("album") or {}
     images = album.get("images") or []
@@ -131,6 +132,51 @@ def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
         "image": image_url,
         "url": (item.get("external_urls") or {}).get("spotify"),
     }
+
+
+def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
+    if not item or item.get("is_local"):
+        return None
+    return _normalize_catalog_track(item)
+
+
+def _normalize_playlist_track_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Normalize a `track` object from GET /playlists/{id}/items rows (may be track, episode,
+    local file, or null if removed).
+    """
+    if not item:
+        return None
+    if item.get("type") == "episode":
+        show = item.get("show") or {}
+        images = item.get("images") or []
+        image_url = next((img.get("url") for img in images if img.get("url")), None)
+        pub = (show.get("publisher") or "").strip()
+        show_name = (show.get("name") or "Podcast").strip()
+        artists = [pub] if pub else [show_name]
+        return {
+            "type": "episode",
+            "name": item.get("name") or "Episode",
+            "artists": artists,
+            "album": f"{show_name} · Episode",
+            "image": image_url,
+            "url": (item.get("external_urls") or {}).get("spotify"),
+        }
+    if item.get("is_local"):
+        album = item.get("album") or {}
+        images = album.get("images") or []
+        image_url = next((img.get("url") for img in images if img.get("url")), None)
+        artists = [a.get("name", "") for a in item.get("artists") or [] if a.get("name")]
+        return {
+            "type": "track",
+            "name": item.get("name") or "Local file",
+            "artists": artists if artists else ["Local"],
+            "album": (album.get("name") or "").strip() or "This device",
+            "image": image_url,
+            "url": (item.get("external_urls") or {}).get("spotify"),
+            "is_local": True,
+        }
+    return _normalize_catalog_track(item)
 
 
 def _normalize_new_release_album(album: dict[str, Any]) -> dict[str, Any] | None:
@@ -302,11 +348,16 @@ def _playlist_tracks_payload(
     access_token: str, playlist_id: str, *, market: str | None
 ) -> tuple[list[dict[str, Any]] | None, str]:
     """Returns (tracks_list, error_detail). tracks_list None if request failed or empty."""
-    params: dict[str, Any] = {"limit": 30}
-    if market:
-        params["market"] = market
+    m = (market or "").strip().upper()
+    if len(m) != 2 or not m.isalpha():
+        m = _spotify_iso_market()
+    params: dict[str, Any] = {
+        "limit": 30,
+        "additional_types": "episode,track",
+        "market": m,
+    }
     pl = requests.get(
-        f"{SPOTIFY_API}/playlists/{playlist_id}/tracks",
+        f"{SPOTIFY_API}/playlists/{playlist_id}/items",
         headers=_headers(access_token),
         params=params,
         timeout=_REQUEST_TIMEOUT,
@@ -320,7 +371,7 @@ def _playlist_tracks_payload(
 
     tracks = []
     for row in pl.json().get("items") or []:
-        t = _normalize_track(row.get("track") or {})
+        t = _normalize_playlist_track_item(row.get("track") or {})
         if t:
             tracks.append(t)
     return (tracks if tracks else None), ""
@@ -778,12 +829,32 @@ def search_spotify_for_response(
     )
 
 
+def _get_playlist_items_first_page(
+    playlist_id: str, access_token: str, page_limit: int
+) -> requests.Response:
+    """GET /v1/playlists/{id}/items (current API; /tracks is legacy)."""
+    return requests.get(
+        f"{SPOTIFY_API}/playlists/{playlist_id}/items",
+        headers=_headers(access_token),
+        params={
+            "limit": min(100, max(1, page_limit)),
+            "additional_types": "episode,track",
+            "market": _spotify_iso_market(),
+        },
+        timeout=_REQUEST_TIMEOUT,
+    )
+
+
 def fetch_playlist_tracks_for_response(
     oauth_access_token: str = "",
     playlist_id: str = "",
-    limit: int = 100,
+    limit: int = 500,
+    oauth_refresh_token: str = "",
+    client_id: str = "",
+    client_secret: str = "",
+    on_token_refresh: Callable[[str, str | None], None] | None = None,
 ) -> tuple[dict[str, Any], int]:
-    """Fetch up to `limit` tracks from a playlist. Requires a user OAuth token."""
+    """Fetch up to `limit` playlist items (tracks/episodes) via GET /playlists/{id}/items."""
     token = (oauth_access_token or "").strip()
     pid = (playlist_id or "").strip()
     if not token:
@@ -791,18 +862,58 @@ def fetch_playlist_tracks_for_response(
     if not pid:
         return ({"error": "missing_playlist_id", "message": "Playlist ID is required."}, 400)
 
-    cap = min(max(1, limit), 100)
-    res = requests.get(
-        f"{SPOTIFY_API}/playlists/{pid}/tracks",
-        headers=_headers(token),
-        params={"limit": cap, "fields": "items(track(name,artists,album,external_urls,images,is_local)),total,next"},
-        timeout=_REQUEST_TIMEOUT,
-    )
+    cap = min(max(1, limit), 1000)
+    refresh_tok = (oauth_refresh_token or "").strip()
+    cid, csec = client_id.strip(), client_secret.strip()
+    used_oauth = bool((oauth_access_token or "").strip())
+
+    active_token = token
+    res = _get_playlist_items_first_page(pid, active_token, min(100, cap))
+
+    if res.status_code in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
+        new_access, new_refresh, _err = refresh_spotify_user_access_token(
+            cid, csec, refresh_tok
+        )
+        if new_access:
+            on_token_refresh(new_access, new_refresh)
+            active_token = new_access
+            res = _get_playlist_items_first_page(pid, active_token, min(100, cap))
 
     if res.status_code == 401:
         return ({"error": "token_expired", "message": "Spotify session expired. Reconnect your account."}, 401)
     if res.status_code == 403:
-        return ({"error": "insufficient_scope", "message": "Missing playlist scope. Reconnect Spotify."}, 403)
+        detail = ""
+        try:
+            err = res.json().get("error") or {}
+            detail = (err.get("message") or "").strip()
+        except Exception:
+            detail = (res.text or "")[:200]
+        low = detail.lower()
+        if "scope" in low:
+            return (
+                {
+                    "error": "insufficient_scope",
+                    "message": "Missing Spotify permission. Disconnect and reconnect Spotify to approve all requested scopes.",
+                    "detail": detail,
+                },
+                403,
+            )
+        generic = not detail or detail.lower() == "forbidden"
+        return (
+            {
+                "error": "spotify_forbidden",
+                "message": (
+                    "Spotify blocked this playlist’s tracks. You must own the playlist or be a "
+                    "collaborator (Spotify no longer exposes full track lists for playlists you only "
+                    "follow). If it is yours, disconnect and reconnect Spotify so the token includes "
+                    "user-read-private (account country) and playlist scopes."
+                    if generic
+                    else detail
+                ),
+                "detail": detail,
+            },
+            403,
+        )
     if res.status_code == 404:
         return ({"error": "not_found", "message": "Playlist not found or is private."}, 404)
     if res.status_code != 200:
@@ -814,9 +925,26 @@ def fetch_playlist_tracks_for_response(
 
     body = res.json()
     total = body.get("total", 0)
+    raw_items: list[dict[str, Any]] = list(body.get("items") or [])
+    next_url = (body.get("next") or "").strip() or None
+    while next_url and len(raw_items) < cap:
+        page = requests.get(
+            next_url,
+            headers=_headers(active_token),
+            timeout=_REQUEST_TIMEOUT,
+        )
+        if page.status_code != 200:
+            break
+        chunk = page.json()
+        raw_items.extend(chunk.get("items") or [])
+        next_url = (chunk.get("next") or "").strip() or None
+
     tracks = []
-    for row in body.get("items") or []:
-        t = _normalize_track(row.get("track") or {})
+    for row in raw_items[:cap]:
+        wrapped = row.get("track")
+        if wrapped is None and isinstance(row.get("item"), dict):
+            wrapped = row["item"]
+        t = _normalize_playlist_track_item(wrapped or {})
         if t:
             tracks.append(t)
 
@@ -826,6 +954,10 @@ def fetch_playlist_tracks_for_response(
 def fetch_user_playlists_for_response(
     oauth_access_token: str = "",
     limit: int = 50,
+    oauth_refresh_token: str = "",
+    client_id: str = "",
+    client_secret: str = "",
+    on_token_refresh: Callable[[str, str | None], None] | None = None,
 ) -> tuple[dict[str, Any], int]:
     """
     Fetch the current user's playlists via /v1/me/playlists.
@@ -841,12 +973,30 @@ def fetch_user_playlists_for_response(
             401,
         )
 
+    refresh_tok = (oauth_refresh_token or "").strip()
+    cid, csec = client_id.strip(), client_secret.strip()
+    used_oauth = bool((oauth_access_token or "").strip())
+
     res = requests.get(
         f"{SPOTIFY_API}/me/playlists",
         headers=_headers(token),
         params={"limit": min(limit, 50)},
         timeout=_REQUEST_TIMEOUT,
     )
+
+    if res.status_code in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
+        new_access, new_refresh, _err = refresh_spotify_user_access_token(
+            cid, csec, refresh_tok
+        )
+        if new_access:
+            on_token_refresh(new_access, new_refresh)
+            token = new_access
+            res = requests.get(
+                f"{SPOTIFY_API}/me/playlists",
+                headers=_headers(token),
+                params={"limit": min(limit, 50)},
+                timeout=_REQUEST_TIMEOUT,
+            )
 
     if res.status_code == 401:
         return (
@@ -886,12 +1036,14 @@ def fetch_user_playlists_for_response(
             continue
         images = p.get("images") or []
         image_url = next((img.get("url") for img in images if img.get("url")), None)
+        tr_ref = p.get("tracks") or {}
+        tc = tr_ref.get("total")
         playlists.append({
             "id": p.get("id") or "",
             "name": p.get("name") or "Untitled Playlist",
             "description": p.get("description") or "",
             "image": image_url,
-            "track_count": (p.get("tracks") or {}).get("total", 0),
+            "track_count": tc if tc is not None else None,
             "owner": (p.get("owner") or {}).get("display_name") or "",
             "url": (p.get("external_urls") or {}).get("spotify") or "",
             "public": p.get("public", False),

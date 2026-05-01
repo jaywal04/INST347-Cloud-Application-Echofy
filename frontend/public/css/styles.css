@@ -643,6 +643,10 @@ footer a:hover { color: var(--accent); }
   text-align: center;
 }
 
+.discover-connect-link[hidden] {
+  display: none !important;
+}
+
 .discover-connected {
   font-size: 0.78rem;
   color: var(--accent);

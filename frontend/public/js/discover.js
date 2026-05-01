@@ -186,12 +186,24 @@
         .then(function (ref) {
           if (!ref.ok) {
             trackStatus.innerHTML = '';
-            var msg = document.createTextNode(ref.data.message || 'Could not load tracks.');
-            trackStatus.appendChild(msg);
-            if (ref.data.error === 'insufficient_scope' || ref.data.error === 'token_expired') {
+            var m = (ref.data.message || '').trim();
+            var d = (ref.data.detail || '').trim();
+            var baseMsg = m || 'Could not load tracks.';
+            if (d && d !== m && baseMsg.indexOf(d) === -1) {
+              baseMsg += ' — ' + d;
+            }
+            trackStatus.appendChild(document.createTextNode(baseMsg));
+            if (
+              ref.data.error === 'insufficient_scope' ||
+              ref.data.error === 'token_expired' ||
+              ref.data.error === 'spotify_forbidden'
+            ) {
               var reconnectLink = document.createElement('a');
               reconnectLink.href = API_BASE + '/auth/spotify';
-              reconnectLink.textContent = ' Reconnect Spotify →';
+              reconnectLink.textContent =
+                ref.data.error === 'spotify_forbidden'
+                  ? ' Reconnect Spotify (needed after new permissions) →'
+                  : ' Reconnect Spotify →';
               reconnectLink.style.marginLeft = '0.4rem';
               trackStatus.appendChild(reconnectLink);
             }
@@ -199,9 +211,19 @@
           }
           allTracks = ref.data.tracks || [];
           loaded = true;
-          var total = ref.data.total || allTracks.length;
-          if (total > allTracks.length) {
-            trackStatus.textContent = 'Showing first ' + allTracks.length + ' of ' + total + ' tracks.';
+          var total =
+            ref.data.total != null && ref.data.total !== ''
+              ? Number(ref.data.total)
+              : allTracks.length;
+          if (Number.isNaN(total)) total = allTracks.length;
+          if (allTracks.length === 0 && total > 0) {
+            trackStatus.textContent =
+              'Spotify lists ' +
+              total +
+              ' item(s), but none could be shown here (e.g. unavailable in your region, removed from Spotify, or local-only files the web API omits). Open the playlist in the Spotify app to confirm.';
+          } else if (total > allTracks.length) {
+            trackStatus.textContent =
+              'Showing first ' + allTracks.length + ' of ' + total + ' tracks.';
           }
           filterAndRender(searchInput.value);
         })
@@ -257,11 +279,16 @@
 
   function updateSpotifyConnectionUi(connected) {
     if (connectLink) {
+      connectLink.hidden = !!connected;
+      /* .discover-connect-link { display: inline-block } can override [hidden] in CSS cascade */
+      connectLink.style.display = connected ? 'none' : '';
       if (connected) {
-        connectLink.remove();
-        connectLink = null;
+        connectLink.setAttribute('aria-hidden', 'true');
       } else {
-        connectLink.hidden = false;
+        connectLink.removeAttribute('aria-hidden');
+      }
+      if (!connected && API_BASE) {
+        connectLink.href = API_BASE + '/auth/spotify';
       }
     }
     if (connectedBadge) connectedBadge.hidden = !connected;
@@ -296,7 +323,7 @@
     } catch (e2) {}
   }
 
-  if (API_BASE && (connectedBadge || disconnectBtn)) {
+  if (API_BASE && (connectLink || connectedBadge || disconnectBtn)) {
     fetch(API_BASE + '/api/spotify/session', fetchOpts)
       .then(function (r) {
         return r.json();
@@ -308,7 +335,11 @@
           updateSpotifyConnectionUi(false);
         }
       })
-      .catch(function () {});
+      .catch(function () {
+        if (!oauthJustConnected) {
+          updateSpotifyConnectionUi(false);
+        }
+      });
   }
 
   if (disconnectBtn && API_BASE) {

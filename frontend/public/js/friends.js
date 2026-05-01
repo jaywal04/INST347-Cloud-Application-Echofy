@@ -23,7 +23,7 @@
     return fetch(API_BASE + '/api/friends', Object.assign({}, fetchOpts, { method: 'GET' }))
       .then(function (res) {
         if (res.status === 401) {
-          window.location.href = 'login';
+          window.location.href = '/login';
           return null;
         }
         return res.json();
@@ -62,7 +62,10 @@
       li.className = 'friends-card';
       var link = document.createElement('a');
       link.className = 'friends-card-link';
-      link.href = 'user?id=' + f.id;
+      link.href =
+        (typeof window.echofyUserPath === 'function'
+          ? window.echofyUserPath('user')
+          : '/user') + '?id=' + f.id;
       if (f.profile_image_url) {
         var img = document.createElement('img');
         img.className = 'friends-card-img';
@@ -149,7 +152,7 @@
     fetch(API_BASE + '/api/users/search?q=' + encodeURIComponent(q), Object.assign({}, fetchOpts, { method: 'GET' }))
       .then(function (res) {
         if (res.status === 401) {
-          window.location.href = 'login';
+          window.location.href = '/login';
           return null;
         }
         return res.json();

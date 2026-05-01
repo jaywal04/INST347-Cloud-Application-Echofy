@@ -4,7 +4,7 @@ import os
 import secrets
 import sys
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 import requests
 from dotenv import load_dotenv
@@ -36,9 +36,19 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 _ENV_FILE = _ROOT / ".env"
 
 SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
-SPOTIFY_OAUTH_SCOPE = "user-top-read playlist-read-private"
+# user-read-private: Spotify uses account country for playlist/eligibility when a user token
+# is sent; without it, /playlists/{id}/items can return 403 even with playlist-read-private.
+# Override entirely: ECHOFY_SPOTIFY_SCOPES="scope1 scope2" (space-separated).
+_SPOTIFY_SCOPES_RAW = os.environ.get("ECHOFY_SPOTIFY_SCOPES", "").strip()
+SPOTIFY_OAUTH_SCOPE = _SPOTIFY_SCOPES_RAW or (
+    "user-top-read "
+    "playlist-read-private "
+    "playlist-read-collaborative "
+    "user-read-private "
+    "user-library-read"
+)
 _spotify_redirect_port_warning_shown = False
-# Maps OAuth state token → {"user_id": int|None, "frontend_host": str}
+# Maps OAuth state token → {"user_id", "frontend_host", "username"} (username optional)
 _oauth_state_map: dict[str, dict] = {}
 
 
@@ -114,16 +124,25 @@ def _spotify_redirect_uri() -> str:
     return fixed
 
 
-def _oauth_success_url(frontend_host: str = "localhost") -> str:
+def _oauth_success_url(
+    frontend_host: str = "localhost", username: str | None = None
+) -> str:
     raw = os.environ.get("ECHOFY_OAUTH_SUCCESS_URL", "").strip()
     if raw:
         return _strip_env_quotes(raw)
+    if username:
+        safe = quote(username, safe="")
+        return f"http://{frontend_host}:3001/{safe}/dashboard?spotify=connected"
     return f"http://{frontend_host}:3001/discover?spotify=connected"
 
 
-def _discover_redirect_url(frontend_host: str = "localhost", **query_updates: str) -> str:
-    """Build Discover URL for the given frontend host."""
-    p = urlparse(_oauth_success_url(frontend_host))
+def _discover_redirect_url(
+    frontend_host: str = "localhost",
+    username: str | None = None,
+    **query_updates: str,
+) -> str:
+    """Build post-OAuth frontend URL (dashboard under username when logged in)."""
+    p = urlparse(_oauth_success_url(frontend_host, username))
     path = (p.path or "/discover").split("?")[0] or "/discover"
     merged = dict(parse_qsl(p.query, keep_blank_values=True))
     for key, value in query_updates.items():
@@ -222,15 +241,25 @@ def create_app() -> Flask:
 
     @app.get("/api/spotify/playlists")
     def spotify_playlists():
-        oauth_tok, _ = _spotify_tokens()
-        payload, status = fetch_user_playlists_for_response(oauth_access_token=oauth_tok)
+        oauth_tok, refresh_tok = _spotify_tokens()
+        payload, status = fetch_user_playlists_for_response(
+            oauth_access_token=oauth_tok,
+            oauth_refresh_token=refresh_tok,
+            client_id=_spotify_client_id(),
+            client_secret=_spotify_client_secret(),
+            on_token_refresh=_persist_spotify_tokens,
+        )
         return jsonify(payload), status
 
     @app.get("/api/spotify/playlists/<playlist_id>/tracks")
     def spotify_playlist_tracks(playlist_id: str):
-        oauth_tok, _ = _spotify_tokens()
+        oauth_tok, refresh_tok = _spotify_tokens()
         payload, status = fetch_playlist_tracks_for_response(
             oauth_access_token=oauth_tok,
+            oauth_refresh_token=refresh_tok,
+            client_id=_spotify_client_id(),
+            client_secret=_spotify_client_secret(),
+            on_token_refresh=_persist_spotify_tokens,
             playlist_id=playlist_id,
         )
         return jsonify(payload), status
@@ -340,6 +369,9 @@ def create_app() -> Flask:
         _oauth_state_map[state] = {
             "user_id": current_user.id if current_user.is_authenticated else None,
             "frontend_host": frontend_host,
+            "username": (
+                current_user.username if current_user.is_authenticated else None
+            ),
         }
         params = {
             "client_id": client_id,
@@ -354,10 +386,21 @@ def create_app() -> Flask:
     @app.get("/callback")
     def spotify_oauth_callback():
         err = request.args.get("error")
+        state_for_err = request.args.get("state")
         if err:
             desc = (request.args.get("error_description") or "").strip()
+            entry_err = (
+                _oauth_state_map.pop(state_for_err, None) if state_for_err else None
+            )
+            fh = (entry_err or {}).get("frontend_host", "localhost")
+            un = (entry_err or {}).get("username")
             return redirect(
-                _discover_redirect_url(spotify_error=err, spotify_error_description=desc)
+                _discover_redirect_url(
+                    fh,
+                    username=un,
+                    spotify_error=err,
+                    spotify_error_description=desc,
+                )
             )
 
         code = request.args.get("code")
@@ -368,8 +411,12 @@ def create_app() -> Flask:
         expected_session = session.pop("spotify_oauth_state", None)
 
         if not code or not state or (entry is None and state != expected_session):
+            fh_bad = (entry or {}).get("frontend_host", "localhost") if entry else "localhost"
+            un_bad = (entry or {}).get("username") if entry else None
             return redirect(
                 _discover_redirect_url(
+                    fh_bad,
+                    username=un_bad,
                     spotify_error="invalid_state",
                     spotify_error_description="OAuth state mismatch. Close this tab and use Connect Spotify again.",
                 )
@@ -377,6 +424,7 @@ def create_app() -> Flask:
 
         frontend_host = (entry or {}).get("frontend_host", "localhost")
         user_id = (entry or {}).get("user_id")
+        oauth_username = (entry or {}).get("username")
 
         client_id = _spotify_client_id()
         client_secret = _spotify_client_secret()
@@ -417,6 +465,7 @@ def create_app() -> Flask:
             return jsonify(error="no_access_token"), 502
 
         # Save tokens — prefer DB for identified users, fall back to session
+        username_for_redirect: str | None = oauth_username
         if user_id:
             u = db.session.get(User, user_id)
             if u:
@@ -424,12 +473,13 @@ def create_app() -> Flask:
                 if data.get("refresh_token"):
                     u.spotify_refresh_token = data["refresh_token"]
                 db.session.commit()
+                username_for_redirect = u.username
         else:
             session["spotify_access_token"] = access
             if data.get("refresh_token"):
                 session["spotify_refresh_token"] = data["refresh_token"]
 
-        return redirect(_oauth_success_url(frontend_host))
+        return redirect(_oauth_success_url(frontend_host, username_for_redirect))
 
     return app
 

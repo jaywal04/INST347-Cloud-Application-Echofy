@@ -1,0 +1,10 @@
+{
+  "routes": [
+    { "route": "/*/dashboard", "rewrite": "/discover.html" },
+    { "route": "/*/discover", "rewrite": "/discover.html" },
+    { "route": "/*/friends", "rewrite": "/friends.html" },
+    { "route": "/*/profile", "rewrite": "/profile.html" },
+    { "route": "/*/notifications", "rewrite": "/notifications.html" },
+    { "route": "/*/user", "rewrite": "/user.html" }
+  ]
+}

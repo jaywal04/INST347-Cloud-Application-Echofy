@@ -20,6 +20,30 @@ from app.models import FriendRequest, PendingVerification, User, utcnow_naive
 auth_bp = Blueprint("auth", __name__)
 
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,30}$")
+
+# First URL segment for logged-in routes; static dirs — do not allow as usernames.
+_RESERVED_USERNAMES = frozenset(
+    {
+        "login",
+        "signup",
+        "discover",
+        "dashboard",
+        "friends",
+        "profile",
+        "notifications",
+        "user",
+        "css",
+        "js",
+        "index",
+        "api",
+        "auth",
+        "callback",
+        "static",
+        "assets",
+        "fonts",
+        "www",
+    }
+)
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _MIN_PASSWORD_LEN = 8
 _MAX_VERIFY_ATTEMPTS = 5
@@ -44,6 +68,8 @@ def signup():
         errors.append("A valid email is required.")
     if not _USERNAME_RE.match(username):
         errors.append("Username must be 3-30 characters (letters, numbers, underscores).")
+    elif username.lower() in _RESERVED_USERNAMES:
+        errors.append("That username is reserved. Please choose another.")
     if len(password) < _MIN_PASSWORD_LEN:
         errors.append(f"Password must be at least {_MIN_PASSWORD_LEN} characters.")
     if password != confirm:
@@ -115,6 +141,14 @@ def verify_signup():
         db.session.delete(pv)
         db.session.commit()
         return jsonify(ok=False, errors=["Email or username is already taken."]), 409
+
+    if pv.username.lower() in _RESERVED_USERNAMES:
+        db.session.delete(pv)
+        db.session.commit()
+        return jsonify(
+            ok=False,
+            errors=["That username is reserved. Please sign up again with a different username."],
+        ), 400
 
     # Create the user
     user = User(username=pv.username, email=email, accepted_terms=True)

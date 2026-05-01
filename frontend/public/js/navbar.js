@@ -11,18 +11,7 @@
   } else {
     API_BASE = 'https://echofy-backend-c7b8a0are7abgxhn.canadacentral-01.azurewebsites.net';
   }
-  // Expose for other page scripts that still read it
   if (!window.ECHOFY_API_BASE) window.ECHOFY_API_BASE = API_BASE;
-
-  // --- Build nav structure ---
-  var raw = window.location.pathname.split('/').pop().replace('.html', '') || '';
-  var page = raw || '/';
-
-  var links = [
-    { href: 'discover', text: 'Discover' },
-    { href: 'friends', text: 'Friends' },
-    { href: '#', text: 'Your Echo' },
-  ];
 
   var nav = document.createElement('nav');
 
@@ -33,18 +22,6 @@
 
   var ul = document.createElement('ul');
   ul.className = 'nav-links';
-
-  links.forEach(function (link) {
-    var li = document.createElement('li');
-    var a = document.createElement('a');
-    a.href = link.href;
-    a.textContent = link.text;
-    if (page === link.href) {
-      a.className = 'is-active';
-    }
-    li.appendChild(a);
-    ul.appendChild(li);
-  });
 
   var authDiv = document.createElement('div');
   authDiv.id = 'nav-auth';
@@ -58,17 +35,69 @@
     placeholder.replaceWith(nav);
   }
 
-  // --- Auth state (replaces nav-auth.js) ---
   function reveal() {
     nav.classList.add('ready');
   }
 
+  function userHomePath(username) {
+    return '/' + encodeURIComponent(username) + '/dashboard';
+  }
+
+  function appendNavLinks(links) {
+    ul.innerHTML = '';
+    links.forEach(function (link) {
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = link.href;
+      a.textContent = link.text;
+      if (link.active) {
+        a.className = 'is-active';
+      }
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+  }
+
+  function buildMainNav(username) {
+    var base = '/' + encodeURIComponent(username);
+    var pathParts = window.location.pathname.split('/').filter(Boolean);
+    var activeSeg =
+      pathParts.length >= 2 && pathParts[0] === username ? pathParts[1] : '';
+
+    appendNavLinks([
+      {
+        href: base + '/dashboard',
+        text: 'Discover',
+        active: activeSeg === 'dashboard' || activeSeg === 'discover',
+      },
+      { href: base + '/friends', text: 'Friends', active: activeSeg === 'friends' },
+      { href: '#', text: 'Your Echo', active: false },
+    ]);
+  }
+
+  function buildPublicNav() {
+    var pathParts = window.location.pathname.split('/').filter(Boolean);
+    var p0 = (pathParts[0] || '').toLowerCase();
+    var activeDiscover = pathParts.length === 1 && (p0 === 'discover' || p0 === 'dashboard');
+    var activeFriends = pathParts.length === 1 && p0 === 'friends';
+    appendNavLinks([
+      { href: '/discover', text: 'Discover', active: activeDiscover },
+      { href: '/friends', text: 'Friends', active: activeFriends },
+      { href: '#', text: 'Your Echo', active: false },
+    ]);
+  }
+
+  buildPublicNav();
+
   fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
-    .then(function (res) { return res.json(); })
+    .then(function (res) {
+      return res.json();
+    })
     .then(function (data) {
       if (!data.authenticated || !data.user) {
+        buildPublicNav();
         var signIn = document.createElement('a');
-        signIn.href = 'login';
+        signIn.href = '/login';
         signIn.className = 'nav-cta';
         signIn.textContent = 'Sign In';
         authDiv.appendChild(signIn);
@@ -78,9 +107,13 @@
 
       var u = data.user;
       var initials = u.username.substring(0, 2).toUpperCase();
+      var base = '/' + encodeURIComponent(u.username);
+
+      logo.href = userHomePath(u.username);
+      buildMainNav(u.username);
 
       var bellLink = document.createElement('a');
-      bellLink.href = 'notifications';
+      bellLink.href = base + '/notifications';
       bellLink.className = 'nav-notif-link';
       bellLink.title = 'Notifications';
       bellLink.innerHTML =
@@ -90,7 +123,7 @@
         '</svg>';
 
       var profileLink = document.createElement('a');
-      profileLink.href = 'profile';
+      profileLink.href = base + '/profile';
       profileLink.className = 'nav-profile-link';
       if (u.profile_image_url) {
         var img = document.createElement('img');
@@ -105,13 +138,25 @@
         profileLink.appendChild(div);
       }
 
+      var pathParts = window.location.pathname.split('/').filter(Boolean);
+      var activeSeg =
+        pathParts.length >= 2 && pathParts[0] === u.username ? pathParts[1] : '';
+      if (activeSeg === 'notifications') {
+        bellLink.className += ' is-active';
+      }
+      if (activeSeg === 'profile') {
+        profileLink.className += ' is-active';
+      }
+
       authDiv.innerHTML = '';
       authDiv.appendChild(bellLink);
       authDiv.appendChild(profileLink);
       reveal();
 
       fetch(API_BASE + '/api/notifications/count', { credentials: 'include' })
-        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          return res.json();
+        })
         .then(function (d) {
           if (d.ok && d.count > 0) {
             var badge = document.createElement('span');

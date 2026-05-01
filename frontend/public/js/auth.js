@@ -219,8 +219,11 @@
             showVerifyError(ref.data.errors || ['Verification failed.']);
             return;
           }
-          // Success — account created, redirect to discover
-          window.location.href = 'discover';
+          // Success — account created, redirect to username dashboard
+          var un = (ref.data.user && ref.data.user.username) || '';
+          window.location.href = un
+            ? '/' + encodeURIComponent(un) + '/dashboard'
+            : '/discover';
         })
         .catch(function () {
           showVerifyError('Network error.');
@@ -301,7 +304,10 @@
             showError(ref.data.errors || ['Invalid username or password.']);
             return;
           }
-          window.location.href = 'discover';
+          var logged = (ref.data.user && ref.data.user.username) || '';
+          window.location.href = logged
+            ? '/' + encodeURIComponent(logged) + '/dashboard'
+            : '/discover';
         })
         .catch(function () {
           showError(

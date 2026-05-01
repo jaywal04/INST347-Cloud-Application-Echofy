@@ -37,7 +37,7 @@
     fetch(API_BASE + '/api/auth/profile', Object.assign({}, fetchOpts, { method: 'GET' }))
       .then(function (res) {
         if (res.status === 401) {
-          window.location.href = 'login';
+          window.location.href = '/login';
           return null;
         }
         return res.json();

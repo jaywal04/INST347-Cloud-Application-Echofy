@@ -13,6 +13,17 @@ from pathlib import Path
 PORT = int(os.environ.get("PORT", "3001"))
 DIRECTORY = Path(__file__).resolve().parent / "public"
 
+# /{username}/dashboard → discover.html (same for discover)
+_USER_PAGE_HTML = {
+    "dashboard": "discover.html",
+    "discover": "discover.html",
+    "friends": "friends.html",
+    "profile": "profile.html",
+    "notifications": "notifications.html",
+    "user": "user.html",
+}
+_STATIC_FIRST_SEGMENTS = frozenset({"css", "js", "assets", "fonts"})
+
 
 class CleanURLHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -32,6 +43,17 @@ class CleanURLHandler(SimpleHTTPRequestHandler):
         else:
             path, qs = self.path, ""
         path = path.split("#")[0]
+
+        segments = [s for s in path.split("/") if s]
+        if len(segments) >= 2:
+            first, page = segments[0], segments[1]
+            if (
+                first.lower() not in _STATIC_FIRST_SEGMENTS
+                and page in _USER_PAGE_HTML
+            ):
+                inner = _USER_PAGE_HTML[page]
+                self.path = "/" + inner + ("?" + qs if qs else "")
+                return super().do_GET()
 
         # If the path has no file extension, try appending .html
         if "." not in path.split("/")[-1] and path != "/":

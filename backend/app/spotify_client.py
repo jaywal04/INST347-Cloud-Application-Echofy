@@ -645,8 +645,16 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
     )
 
 
-def _legacy_user_then_playlist(user_token: str) -> tuple[dict[str, Any], int]:
-    """Try /me/top/tracks, then Global Top 50 using the same user token (only if /me succeeds)."""
+def _legacy_user_then_playlist(
+    user_token: str,
+    *,
+    client_id: str = "",
+    client_secret: str = "",
+) -> tuple[dict[str, Any], int]:
+    """Try /me/top/tracks first. If /me succeeds but there are no tracks, prefer a
+    **client-credentials** public chart — the same chart calls often return **403
+    Forbidden** when called with a **user** OAuth token (licensing / catalog rules).
+    """
     headers = _headers(user_token)
 
     me = requests.get(
@@ -675,6 +683,18 @@ def _legacy_user_then_playlist(user_token: str) -> tuple[dict[str, Any], int]:
     if tracks:
         return ({"source": "your_top_tracks", "tracks": tracks}, 200)
 
+    cid, csec = client_id.strip(), client_secret.strip()
+    if cid and csec:
+        cc_token, _cc_err = _get_client_credentials_token(cid, csec)
+        if cc_token:
+            chart_payload, chart_status = fetch_public_chart(cc_token)
+            if chart_status == 200:
+                chart_payload["spotify_session_note"] = (
+                    "No personalized top tracks in this window yet (or Spotify returned none we "
+                    "can display). Showing a public chart instead."
+                )
+                return chart_payload, chart_status
+
     return fetch_public_chart(user_token.strip())
 
 
@@ -698,14 +718,18 @@ def fetch_top_tracks_for_response(
     used_oauth = bool((oauth_access_token or "").strip())
 
     if user:
-        payload, status = _legacy_user_then_playlist(user)
+        payload, status = _legacy_user_then_playlist(
+            user, client_id=cid, client_secret=csec
+        )
         if status in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
             new_access, new_refresh, err = refresh_spotify_user_access_token(
                 cid, csec, refresh_tok
             )
             if new_access:
                 on_token_refresh(new_access, new_refresh)
-                payload, status = _legacy_user_then_playlist(new_access)
+                payload, status = _legacy_user_then_playlist(
+                    new_access, client_id=cid, client_secret=csec
+                )
         if status in (401, 403) and cid and csec:
             token, err = _get_client_credentials_token(cid, csec)
             if token:

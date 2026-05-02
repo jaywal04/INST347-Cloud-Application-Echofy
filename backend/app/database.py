@@ -13,7 +13,7 @@ db = SQLAlchemy()
 
 
 def apply_remote_db_engine_options(app: Flask) -> None:
-    """Azure SQL and similar hosts often close idle TCP connections; refresh pooled conns."""
+    """Azure SQL/MySQL and similar hosts often close idle TCP connections; refresh pooled conns."""
     uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
     if not uri or uri.startswith("sqlite"):
         return
@@ -23,8 +23,25 @@ def apply_remote_db_engine_options(app: Flask) -> None:
     opts.setdefault("pool_timeout", 30)
     opts.setdefault("pool_size", 5)
     opts.setdefault("max_overflow", 2)
-    opts.setdefault("connect_args", {"timeout": 30})
+    # MySQL uses connect_timeout; MSSQL/others use timeout
+    if uri.startswith("mysql"):
+        opts.setdefault("connect_args", {"connect_timeout": 30})
+    else:
+        opts.setdefault("connect_args", {"timeout": 30})
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = opts
+
+
+def _inject_mysql_charset(uri: str) -> str:
+    """Ensure charset=utf8mb4 is present in a MySQL connection URI.
+
+    Without utf8mb4, MySQL silently truncates 4-byte emoji to '?'.
+    """
+    if not uri.lower().startswith("mysql"):
+        return uri
+    sep = "&" if "?" in uri else "?"
+    if "charset=" not in uri.lower():
+        uri = f"{uri}{sep}charset=utf8mb4"
+    return uri
 
 
 def _build_database_uri() -> str:
@@ -47,7 +64,7 @@ def _build_database_uri() -> str:
 
     generic = os.environ.get("DATABASE_URL", "").strip()
     if generic:
-        return generic
+        return _inject_mysql_charset(generic)
 
     db_path = Path(__file__).resolve().parent.parent / "instance" / "echofy.db"
     db_path.parent.mkdir(exist_ok=True)

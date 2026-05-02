@@ -222,6 +222,10 @@ def login():
 @login_required
 def logout():
     logout_user()
+    from flask import session as flask_session
+    flask_session.pop("spotify_access_token", None)
+    flask_session.pop("spotify_refresh_token", None)
+    flask_session.pop("spotify_oauth_state", None)
     return jsonify(ok=True), 200
 
 

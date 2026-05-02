@@ -1,7 +1,13 @@
 (function () {
   'use strict';
 
-  var API_BASE = window.ECHOFY_API_BASE || '';
+  function apiBase() {
+    return typeof window.echofyApiBaseUrl === 'function'
+      ? window.echofyApiBaseUrl()
+      : String(window.ECHOFY_API_BASE || '')
+          .trim()
+          .replace(/\/+$/, '');
+  }
 
   var nav = document.createElement('nav');
 
@@ -80,7 +86,7 @@
 
   buildPublicNav();
 
-  fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
+  fetch(apiBase() + '/api/auth/me', { credentials: 'include' })
     .then(function (res) {
       return res.json();
     })
@@ -158,7 +164,7 @@
 
       reveal();
 
-      fetch(API_BASE + '/api/notifications/count', { credentials: 'include' })
+      fetch(apiBase() + '/api/notifications/count', { credentials: 'include' })
         .then(function (res) {
           return res.json();
         })

@@ -63,7 +63,12 @@
     return;
   }
 
-  fetch(window.ECHOFY_API_BASE + '/api/auth/me', { credentials: 'include' })
+  fetch(
+    (typeof window.echofyApiBaseUrl === 'function'
+      ? window.echofyApiBaseUrl()
+      : String(window.ECHOFY_API_BASE || '').trim().replace(/\/+$/, '')) + '/api/auth/me',
+    { credentials: 'include' }
+  )
     .then(function (res) {
       return res.json();
     })

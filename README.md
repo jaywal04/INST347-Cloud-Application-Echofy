@@ -161,6 +161,7 @@ All variables go in a `.env` file at the repo root. The static frontend does **n
 | `ECHOFY_SWA_URL`, `ECHOFY_CORS_ORIGINS`, … | Comma-separated allowed browser origins for the API (see [`.env.example`](.env.example)). |
 | **Discord (optional)** | |
 | `DISCORD_WEBHOOK_URL` | Discord incoming webhook; server posts client error summaries from `/api/telemetry/client-error`. Alias: `ECHOFY_DISCORD_WEBHOOK_URL`. |
+| `ECHOFY_DISCORD_NOTIFY_STARTUP` | If `1` (default) and a webhook URL is set, each API process sends one green “API is running” embed at startup. Set to `0` to disable. |
 
 ### Static Web Apps (frontend) and API base URL
 
@@ -177,4 +178,8 @@ From the repo root (venv activated): **`python scripts/admin_cli.py`**. Loads `a
 
 ### Discord bug alerts (optional)
 
-Set **`DISCORD_WEBHOOK_URL`** in repo-root `.env` (and in **Azure App Service** application settings for production) to an [incoming webhook](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks) URL. When a browser action fails (network or unexpected errors), the frontend calls **`POST /api/telemetry/client-error`** and the API posts a **sanitized** JSON summary to Discord. Passwords and similar fields are stripped server-side. If the variable is unset, reports are accepted but not forwarded. Treat the webhook URL like a secret; if it leaks, regenerate it in Discord.
+Set **`DISCORD_WEBHOOK_URL`** in repo-root `.env` (and in **Azure App Service** application settings for production) to an [incoming webhook](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks) URL.
+
+When the Flask app finishes loading, the server posts a short **“Echofy API is running”** embed (Python version, `PORT`, Azure `WEBSITE_HOSTNAME` when present) in a background thread so startup is not delayed. With **gunicorn** and multiple workers, you may get one message per worker; set **`ECHOFY_DISCORD_NOTIFY_STARTUP=0`** to turn startup pings off while keeping client-error reports.
+
+When a browser action fails (network or unexpected errors), the frontend calls **`POST /api/telemetry/client-error`** and the API posts a **sanitized** JSON summary to Discord. Passwords and similar fields are stripped server-side. If the webhook variable is unset, client reports are accepted but not forwarded. Treat the webhook URL like a secret; if it leaks, regenerate it in Discord.

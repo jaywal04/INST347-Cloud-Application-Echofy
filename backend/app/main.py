@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import secrets
 import sys
+import threading
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
@@ -544,6 +545,42 @@ def create_app() -> Flask:
                 return redirect(f"{ro}/{safe}/discovery?spotify=connected")
             return redirect(f"{ro}/discover?spotify=connected")
         return redirect(_oauth_success_url(frontend_host, username_for_redirect))
+
+    def _schedule_discord_startup_notification(flask_app: Flask) -> None:
+        """Post a green embed when the API process is ready (non-blocking)."""
+        raw = (os.environ.get("ECHOFY_DISCORD_NOTIFY_STARTUP") or "1").strip().lower()
+        if raw in ("0", "false", "no"):
+            return
+        if not first_non_empty("DISCORD_WEBHOOK_URL", "ECHOFY_DISCORD_WEBHOOK_URL"):
+            return
+        # Werkzeug reloader: skip parent process so we only ping once per dev restart.
+        if flask_app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+            return
+
+        def _job() -> None:
+            try:
+                from app.discord_webhook import send_discord_embed
+
+                wh = first_non_empty("DISCORD_WEBHOOK_URL", "ECHOFY_DISCORD_WEBHOOK_URL")
+                if not wh:
+                    return
+                payload = {
+                    "event": "backend_startup",
+                    "python": sys.version.split()[0],
+                    "pid": os.getpid(),
+                    "port": os.environ.get("PORT", ""),
+                    "flask_env": os.environ.get("FLASK_ENV", ""),
+                    "flask_debug": bool(flask_app.debug),
+                    "website_hostname": os.environ.get("WEBSITE_HOSTNAME", ""),
+                    "website_site_name": os.environ.get("WEBSITE_SITE_NAME", ""),
+                }
+                send_discord_embed(wh, "Echofy API is running", payload, color=0x57F287)
+            except Exception:
+                pass
+
+        threading.Thread(target=_job, name="echofy-discord-startup", daemon=True).start()
+
+    _schedule_discord_startup_notification(app)
 
     return app
 

@@ -37,7 +37,9 @@ def sanitize_for_report(obj: Any, max_depth: int = 6, max_str: int = 400) -> Any
     return str(obj)[:max_str]
 
 
-def send_client_bug_embed(webhook_url: str, title: str, payload: dict[str, Any]) -> bool:
+def send_discord_embed(
+    webhook_url: str, title: str, payload: dict[str, Any], color: int = 0xE74C3C
+) -> bool:
     """Send one embed to Discord. Returns True if the request was accepted."""
     u = (webhook_url or "").strip()
     if not u.startswith("https://") or "/api/webhooks/" not in u:
@@ -52,7 +54,7 @@ def send_client_bug_embed(webhook_url: str, title: str, payload: dict[str, Any])
     embed = {
         "title": title[:256],
         "description": f"```json\n{body}\n```"[:4090],
-        "color": 0xE74C3C,
+        "color": int(color),
     }
     try:
         r = requests.post(
@@ -64,3 +66,8 @@ def send_client_bug_embed(webhook_url: str, title: str, payload: dict[str, Any])
         return r.status_code in (200, 204)
     except Exception:
         return False
+
+
+def send_client_bug_embed(webhook_url: str, title: str, payload: dict[str, Any]) -> bool:
+    """Send a client-error style (red) embed."""
+    return send_discord_embed(webhook_url, title, payload, color=0xE74C3C)

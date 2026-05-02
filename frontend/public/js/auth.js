@@ -1,7 +1,13 @@
 (function () {
   'use strict';
 
-  var API_BASE = window.ECHOFY_API_BASE || '';
+  function apiBase() {
+    return typeof window.echofyApiBaseUrl === 'function'
+      ? window.echofyApiBaseUrl()
+      : String(window.ECHOFY_API_BASE || '')
+          .trim()
+          .replace(/\/+$/, '');
+  }
 
   var MSG_UNREACHABLE =
     'We could not complete that request. The team has been notified. Please try again in a moment.';
@@ -12,7 +18,7 @@
         Object.assign(
           {
             scope: scope,
-            apiBasePresent: !!API_BASE,
+            apiBasePresent: !!apiBase(),
             errorMessage: err && err.message ? String(err.message) : 'request_failed',
           },
           extra || {}
@@ -172,7 +178,7 @@
       btn.disabled = true;
       btn.textContent = 'Sending code...';
 
-      fetch(API_BASE + '/api/auth/signup', Object.assign({}, fetchOpts, {
+      fetch(apiBase() + '/api/auth/signup', Object.assign({}, fetchOpts, {
         method: 'POST',
         body: JSON.stringify({
           email: email,
@@ -224,7 +230,7 @@
       btn.disabled = true;
       btn.textContent = 'Verifying...';
 
-      fetch(API_BASE + '/api/auth/verify-signup', Object.assign({}, fetchOpts, {
+      fetch(apiBase() + '/api/auth/verify-signup', Object.assign({}, fetchOpts, {
         method: 'POST',
         body: JSON.stringify({ email: pendingEmail, code: code }),
       }))
@@ -262,7 +268,7 @@
       resendBtn.disabled = true;
       resendBtn.textContent = 'Sending...';
 
-      fetch(API_BASE + '/api/auth/resend-code', Object.assign({}, fetchOpts, {
+      fetch(apiBase() + '/api/auth/resend-code', Object.assign({}, fetchOpts, {
         method: 'POST',
         body: JSON.stringify({ email: pendingEmail, purpose: 'signup' }),
       }))
@@ -315,7 +321,7 @@
       btn.disabled = true;
       btn.textContent = 'Signing in...';
 
-      fetch(API_BASE + '/api/auth/login', Object.assign({}, fetchOpts, {
+      fetch(apiBase() + '/api/auth/login', Object.assign({}, fetchOpts, {
         method: 'POST',
         body: JSON.stringify({ username: username, password: password }),
       }))

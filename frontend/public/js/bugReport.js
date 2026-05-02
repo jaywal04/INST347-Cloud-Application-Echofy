@@ -7,7 +7,12 @@
 
   window.echofyReportClientBug = function (detail) {
     try {
-      var base = String(window.ECHOFY_API_BASE || '').replace(/\/+$/, '');
+      var base =
+        typeof window.echofyApiBaseUrl === 'function'
+          ? window.echofyApiBaseUrl()
+          : String(window.ECHOFY_API_BASE || '')
+              .trim()
+              .replace(/\/+$/, '');
       if (!base) {
         return;
       }

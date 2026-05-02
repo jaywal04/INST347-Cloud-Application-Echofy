@@ -162,7 +162,12 @@ All variables go in a `.env` file at the repo root. The static frontend does **n
 
 ### Static Web Apps (frontend) and API base URL
 
-The browser loads **`/echofy-config.json`** on the deployed site to read `{ "apiBase": "https://your-backend..." }`. GitHub Actions writes that file before deploy using the repository secret **`ECHOFY_BACKEND_URL`** (HTTPS API origin, no trailing slash). For local testing against a remote API, copy [`frontend/public/echofy-config.example.json`](frontend/public/echofy-config.example.json) to `frontend/public/echofy-config.json` (that file is gitignored).
+The browser loads **`/echofy-config.json`** on the deployed site to read `{ "apiBase": "https://your-backend..." }`. GitHub Actions writes that file before deploy from **`ECHOFY_BACKEND_URL`** (HTTPS API origin, no trailing slash). Configure it under **Settings → Secrets and variables → Actions**:
+
+- **Variables** (recommended for a normal public App Service URL): create repository variable **`ECHOFY_BACKEND_URL`**.
+- **Secrets** (optional): same name **`ECHOFY_BACKEND_URL`** if you prefer the value masked in logs; if both variable and secret exist, the **secret** is used.
+
+For local testing against a remote API, copy [`frontend/public/echofy-config.example.json`](frontend/public/echofy-config.example.json) to `frontend/public/echofy-config.json` (that file is gitignored).
 
 ### Database admin CLI
 

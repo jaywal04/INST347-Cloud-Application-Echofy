@@ -21,11 +21,18 @@ jobs:
           lfs: false
       - name: Write echofy-config.json for browser API base URL
         env:
-          ECHOFY_BACKEND_URL: ${{ secrets.ECHOFY_BACKEND_URL }}
+          # Use a repository variable (recommended) or a secret — same name in GitHub UI, different contexts:
+          # Settings → Secrets and variables → Actions → Variables: ECHOFY_BACKEND_URL
+          # or Secrets: ECHOFY_BACKEND_URL. Secret wins if both are set.
+          ECHOFY_BACKEND_URL_SECRET: ${{ secrets.ECHOFY_BACKEND_URL }}
+          ECHOFY_BACKEND_URL_VAR: ${{ vars.ECHOFY_BACKEND_URL }}
         run: |
           python3 -c "
           import json, os, pathlib
-          base = (os.environ.get('ECHOFY_BACKEND_URL') or '').strip().rstrip('/')
+          base = (
+              (os.environ.get('ECHOFY_BACKEND_URL_SECRET') or '').strip()
+              or (os.environ.get('ECHOFY_BACKEND_URL_VAR') or '').strip()
+          ).rstrip('/')
           pathlib.Path('frontend/public/echofy-config.json').write_text(
               json.dumps({'apiBase': base}, separators=(',', ':')),
               encoding='utf-8',

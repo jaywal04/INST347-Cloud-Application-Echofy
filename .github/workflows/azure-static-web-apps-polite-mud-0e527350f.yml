@@ -33,6 +33,13 @@ jobs:
               (os.environ.get('ECHOFY_BACKEND_URL_SECRET') or '').strip()
               or (os.environ.get('ECHOFY_BACKEND_URL_VAR') or '').strip()
           ).rstrip('/')
+          if not base:
+              example = pathlib.Path('frontend/public/echofy-config.example.json')
+              if example.is_file():
+                  try:
+                      base = json.loads(example.read_text(encoding='utf-8')).get('apiBase', '').rstrip('/')
+                  except Exception:
+                      pass
           pathlib.Path('frontend/public/echofy-config.json').write_text(
               json.dumps({'apiBase': base}, separators=(',', ':')),
               encoding='utf-8',

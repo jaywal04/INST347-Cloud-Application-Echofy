@@ -159,6 +159,8 @@ All variables go in a `.env` file at the repo root. The static frontend does **n
 | `AZURE_STORAGE_CONTAINER_PROFILES` | Blob container name (default `echofy-profiles`). |
 | **CORS / Static Web Apps** | |
 | `ECHOFY_SWA_URL`, `ECHOFY_CORS_ORIGINS`, … | Comma-separated allowed browser origins for the API (see [`.env.example`](.env.example)). |
+| **Discord (optional)** | |
+| `DISCORD_WEBHOOK_URL` | Discord incoming webhook; server posts client error summaries from `/api/telemetry/client-error`. Alias: `ECHOFY_DISCORD_WEBHOOK_URL`. |
 
 ### Static Web Apps (frontend) and API base URL
 
@@ -172,3 +174,7 @@ For local testing against a remote API, copy [`frontend/public/echofy-config.exa
 ### Database admin CLI
 
 From the repo root (venv activated): **`python scripts/admin_cli.py`**. Loads `app` from `backend/` using the same `.env` database settings as the server.
+
+### Discord bug alerts (optional)
+
+Set **`DISCORD_WEBHOOK_URL`** in repo-root `.env` (and in **Azure App Service** application settings for production) to an [incoming webhook](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks) URL. When a browser action fails (network or unexpected errors), the frontend calls **`POST /api/telemetry/client-error`** and the API posts a **sanitized** JSON summary to Discord. Passwords and similar fields are stripped server-side. If the variable is unset, reports are accepted but not forwarded. Treat the webhook URL like a secret; if it leaks, regenerate it in Discord.

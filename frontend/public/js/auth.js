@@ -3,6 +3,24 @@
 
   var API_BASE = window.ECHOFY_API_BASE || '';
 
+  var MSG_UNREACHABLE =
+    'We could not complete that request. The team has been notified. Please try again in a moment.';
+
+  function reportNetworkFailure(scope, err, extra) {
+    if (window.echofyReportClientBug) {
+      window.echofyReportClientBug(
+        Object.assign(
+          {
+            scope: scope,
+            apiBasePresent: !!API_BASE,
+            errorMessage: err && err.message ? String(err.message) : 'request_failed',
+          },
+          extra || {}
+        )
+      );
+    }
+  }
+
   var fetchOpts = {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -175,12 +193,11 @@
           // Show verification step
           showVerifyStep(ref.data.email || email);
         })
-        .catch(function () {
-          showError(
-            'Network error. Is the backend running on ' +
-              (window.ECHOFY_API_BASE || 'http://localhost:5001') +
-              '?'
-          );
+        .catch(function (err) {
+          reportNetworkFailure('auth.signup', err, {
+            endpoint: '/api/auth/signup',
+          });
+          showError(MSG_UNREACHABLE);
         })
         .finally(function () {
           btn.disabled = false;
@@ -225,8 +242,11 @@
             ? '/' + encodeURIComponent(un) + '/discovery'
             : '/discover';
         })
-        .catch(function () {
-          showVerifyError('Network error.');
+        .catch(function (err) {
+          reportNetworkFailure('auth.verify_signup', err, {
+            endpoint: '/api/auth/verify-signup',
+          });
+          showVerifyError(MSG_UNREACHABLE);
         })
         .finally(function () {
           btn.disabled = false;
@@ -254,8 +274,11 @@
             showVerifyError(data.errors || ['Could not resend code.']);
           }
         })
-        .catch(function () {
-          showVerifyError('Network error.');
+        .catch(function (err) {
+          reportNetworkFailure('auth.resend_code', err, {
+            endpoint: '/api/auth/resend-code',
+          });
+          showVerifyError(MSG_UNREACHABLE);
         })
         .finally(function () {
           resendBtn.textContent = 'Resend Code';
@@ -309,12 +332,11 @@
             ? '/' + encodeURIComponent(logged) + '/discovery'
             : '/discover';
         })
-        .catch(function () {
-          showError(
-            'Network error. Is the backend running on ' +
-              (window.ECHOFY_API_BASE || 'http://localhost:5001') +
-              '?'
-          );
+        .catch(function (err) {
+          reportNetworkFailure('auth.login', err, {
+            endpoint: '/api/auth/login',
+          });
+          showError(MSG_UNREACHABLE);
         })
         .finally(function () {
           btn.disabled = false;

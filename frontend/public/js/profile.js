@@ -3,6 +3,23 @@
 
   var API_BASE = window.ECHOFY_API_BASE || '';
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+  var MSG_NET =
+    'Something went wrong. The team has been notified. Please try again shortly.';
+
+  function reportProfile(scope, err, extra) {
+    if (window.echofyReportClientBug) {
+      window.echofyReportClientBug(
+        Object.assign(
+          {
+            scope: scope,
+            apiBasePresent: !!API_BASE,
+            errorMessage: err && err.message ? String(err.message) : 'request_failed',
+          },
+          extra || {}
+        )
+      );
+    }
+  }
 
   // --- Tab switching ---
   var tabs = document.querySelectorAll('.profile-tab');
@@ -73,7 +90,8 @@
         document.getElementById('priv-bio').checked = p.show_bio !== false;
         document.getElementById('priv-genre').checked = p.show_genre !== false;
       })
-      .catch(function () {
+      .catch(function (err) {
+        reportProfile('profile.load', err, { endpoint: '/api/auth/profile' });
         document.getElementById('profile-username').textContent = 'Error loading profile';
       });
   }
@@ -117,8 +135,9 @@
           showMsg(msgEl, (data.errors || ['Failed to save.']).join(' '), true);
         }
       })
-      .catch(function () {
-        showMsg(document.getElementById('profile-msg'), 'Network error.', true);
+      .catch(function (err) {
+        reportProfile('profile.save', err, { endpoint: '/api/auth/profile' });
+        showMsg(document.getElementById('profile-msg'), MSG_NET, true);
       })
       .finally(function () {
         btn.disabled = false;
@@ -150,8 +169,9 @@
           showMsg(msgEl, (x.data.errors || ['Upload failed.']).join(' '), true);
         }
       })
-      .catch(function () {
-        showMsg(msgEl, 'Network error.', true);
+      .catch(function (err) {
+        reportProfile('profile.photo_upload', err, { endpoint: '/api/auth/profile/photo' });
+        showMsg(msgEl, MSG_NET, true);
       })
       .finally(function () {
         btn.disabled = false;
@@ -173,8 +193,9 @@
           showMsg(msgEl, (data.errors || ['Could not remove photo.']).join(' '), true);
         }
       })
-      .catch(function () {
-        showMsg(msgEl, 'Network error.', true);
+      .catch(function (err) {
+        reportProfile('profile.photo_remove', err, { endpoint: '/api/auth/profile/photo' });
+        showMsg(msgEl, MSG_NET, true);
       })
       .finally(function () {
         btn.disabled = false;
@@ -209,8 +230,9 @@
           showMsg(msgEl, (data.errors || ['Failed to save.']).join(' '), true);
         }
       })
-      .catch(function () {
-        showMsg(document.getElementById('privacy-msg'), 'Network error.', true);
+      .catch(function (err) {
+        reportProfile('profile.privacy_save', err, { endpoint: '/api/auth/privacy' });
+        showMsg(document.getElementById('privacy-msg'), MSG_NET, true);
       })
       .finally(function () {
         btn.disabled = false;
@@ -311,8 +333,9 @@
         document.getElementById('delete-email-display').textContent = deleteEmail;
         startDeleteCountdown();
       })
-      .catch(function () {
-        showMsg(msgEl, 'Network error.', true);
+      .catch(function (err) {
+        reportProfile('profile.delete_request', err, { endpoint: '/api/auth/delete-request' });
+        showMsg(msgEl, MSG_NET, true);
       })
       .finally(function () {
         btn.disabled = false;
@@ -338,8 +361,9 @@
           showMsg(document.getElementById('delete-code-msg'), (data.errors || ['Could not resend.']).join(' '), true);
         }
       })
-      .catch(function () {
-        showMsg(document.getElementById('delete-code-msg'), 'Network error.', true);
+      .catch(function (err) {
+        reportProfile('profile.delete_resend', err, { endpoint: '/api/auth/resend-code' });
+        showMsg(document.getElementById('delete-code-msg'), MSG_NET, true);
       })
       .finally(function () {
         btn.textContent = 'Resend Code';
@@ -372,8 +396,9 @@
           showMsg(msgEl, (ref.data.errors || ['Failed to delete account.']).join(' '), true);
         }
       })
-      .catch(function () {
-        showMsg(msgEl, 'Network error.', true);
+      .catch(function (err) {
+        reportProfile('profile.account_delete', err, { endpoint: '/api/auth/account' });
+        showMsg(msgEl, MSG_NET, true);
       })
       .finally(function () {
         btn.disabled = false;

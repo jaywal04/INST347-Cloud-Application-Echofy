@@ -19,6 +19,7 @@ from app.database import db, init_db
 from app.envutil import first_non_empty
 from app.models import User
 from app.reviews import reviews_bp
+from app.telemetry import telemetry_bp
 from app.spotify_client import (
     SPOTIFY_TOKEN_URL,
     fetch_playlist_tracks_for_response,
@@ -259,6 +260,7 @@ def create_app() -> Flask:
     def unauthorized():
         return jsonify(ok=False, errors=["Login required."]), 401
 
+    app.register_blueprint(telemetry_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(friends_bp)
     app.register_blueprint(reviews_bp)

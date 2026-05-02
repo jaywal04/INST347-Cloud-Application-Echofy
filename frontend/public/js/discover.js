@@ -2,7 +2,24 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
+  var MSG_TRY_AGAIN =
+    'Something went wrong. The team has been notified. Please try again shortly.';
   var STORAGE_KEY = 'echofy-discover-shortlist';
+
+  function reportDiscover(scope, err, extra) {
+    if (window.echofyReportClientBug) {
+      window.echofyReportClientBug(
+        Object.assign(
+          {
+            scope: scope,
+            apiBasePresent: !!API_BASE,
+            errorMessage: err && err.message ? String(err.message) : 'request_failed',
+          },
+          extra || {}
+        )
+      );
+    }
+  }
 
   var btn = document.getElementById('btn-spotify-top');
   var statusEl = document.getElementById('spotify-status');
@@ -241,8 +258,9 @@
           }
           filterAndRender(searchInput.value);
         })
-        .catch(function () {
-          trackStatus.textContent = 'Network error loading tracks.';
+        .catch(function (err) {
+          reportDiscover('discover.playlist_tracks', err, {});
+          trackStatus.textContent = MSG_TRY_AGAIN;
         });
     }
 
@@ -286,8 +304,9 @@
         playlistsEl.appendChild(ul);
         playlistsEl.hidden = false;
       })
-      .catch(function () {
-        if (playlistsStatusEl) playlistsStatusEl.textContent = 'Network error loading playlists.';
+      .catch(function (err) {
+        reportDiscover('discover.spotify_playlists', err, {});
+        if (playlistsStatusEl) playlistsStatusEl.textContent = MSG_TRY_AGAIN;
       });
   }
 
@@ -381,8 +400,9 @@
               'Spotify disconnected. You can connect again anytime for personalized top tracks.';
           }
         })
-        .catch(function () {
-          if (statusEl) statusEl.textContent = 'Network error while disconnecting.';
+        .catch(function (err) {
+          reportDiscover('discover.spotify_disconnect', err, {});
+          if (statusEl) statusEl.textContent = MSG_TRY_AGAIN;
         })
         .finally(function () {
           disconnectBtn.disabled = false;
@@ -458,6 +478,7 @@
       })
       .catch(function (err) {
         console.error('[Echofy] /api/reviews fetch failed', err);
+        reportDiscover('discover.reviews_load', err, { endpoint: '/api/reviews' });
       });
   }
 
@@ -749,7 +770,8 @@
         })
         .catch(function (err) {
           console.error('[Echofy] /api/reviews save failed', err);
-          if (surpriseStatusEl) surpriseStatusEl.textContent = 'Network error while saving review.';
+          reportDiscover('discover.review_save', err, { endpoint: '/api/reviews' });
+          if (surpriseStatusEl) surpriseStatusEl.textContent = MSG_TRY_AGAIN;
         })
         .finally(function () {
           save.disabled = false;
@@ -929,8 +951,9 @@
       })
       .catch(function (err) {
         console.error('[Echofy] Spotify /api/spotify/recommend-by-genre fetch failed', err);
+        reportDiscover('discover.recommend_by_genre', err, {});
         surpriseResultEl.hidden = true;
-        surpriseStatusEl.textContent = 'Network error while loading a genre pick.';
+        surpriseStatusEl.textContent = MSG_TRY_AGAIN;
       })
       .finally(function () {
         if (surpriseBtn) {
@@ -992,8 +1015,9 @@
       })
       .catch(function (err) {
         console.error('[Echofy] Spotify /api/spotify/recommend-like fetch failed', err);
+        reportDiscover('discover.recommend_like', err, {});
         surpriseResultEl.hidden = true;
-        surpriseStatusEl.textContent = 'Network error while loading a same-genre recommendation.';
+        surpriseStatusEl.textContent = MSG_TRY_AGAIN;
       })
       .finally(function () {
         if (surpriseBtn) {
@@ -1054,8 +1078,8 @@
         })
         .catch(function (err) {
           console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
-          statusEl.textContent =
-            'Network error. Is the backend running on ' + (API_BASE || 'http://localhost:5001') + ' ?';
+          reportDiscover('discover.top_tracks', err, { endpoint: '/api/spotify/top-tracks' });
+          statusEl.textContent = MSG_TRY_AGAIN;
         })
         .finally(function () {
           setLoading(false);
@@ -1127,7 +1151,8 @@
         })
         .catch(function (err) {
           console.error('[Echofy] Spotify /api/spotify/search fetch failed', err);
-          searchStatusEl.textContent = 'Network error while searching Spotify.';
+          reportDiscover('discover.spotify_search', err, { endpoint: '/api/spotify/search' });
+          searchStatusEl.textContent = MSG_TRY_AGAIN;
         })
         .finally(function () {
           setSearchLoading(false);

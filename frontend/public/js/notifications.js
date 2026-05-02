@@ -3,6 +3,8 @@
 
   var API_BASE = window.ECHOFY_API_BASE || '';
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+  var MSG_NET =
+    'Something went wrong. The team has been notified. Please try again shortly.';
 
   var listEl = document.getElementById('notif-requests');
   var emptyEl = document.getElementById('notif-empty');
@@ -45,6 +47,19 @@
             '</div>';
           listEl.appendChild(li);
         });
+      })
+      .catch(function (err) {
+        if (window.echofyReportClientBug) {
+          window.echofyReportClientBug({
+            scope: 'notifications.incoming_load',
+            apiBasePresent: !!API_BASE,
+            errorMessage: err && err.message ? String(err.message) : 'request_failed',
+          });
+        }
+        if (emptyEl) {
+          emptyEl.textContent = MSG_NET;
+          emptyEl.hidden = false;
+        }
       });
   }
 

@@ -4,6 +4,23 @@
   var API_BASE = window.ECHOFY_API_BASE || '';
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
   var searchTimer = null;
+  var MSG_NET =
+    'Something went wrong. The team has been notified. Please try again shortly.';
+
+  function reportFriends(scope, err, extra) {
+    if (window.echofyReportClientBug) {
+      window.echofyReportClientBug(
+        Object.assign(
+          {
+            scope: scope,
+            apiBasePresent: !!API_BASE,
+            errorMessage: err && err.message ? String(err.message) : 'request_failed',
+          },
+          extra || {}
+        )
+      );
+    }
+  }
 
   function showMsg(el, text, isError) {
     if (!el) return;
@@ -212,8 +229,9 @@
           showMsg(msgEl, (x.data.errors || ['Could not send request.']).join(' '), true);
         }
       })
-      .catch(function () {
-        showMsg(msgEl, 'Network error.', true);
+      .catch(function (err) {
+        reportFriends('friends.send_request', err, { endpoint: '/api/friends/requests' });
+        showMsg(msgEl, MSG_NET, true);
       })
       .finally(function () {
         btn.disabled = false;

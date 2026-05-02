@@ -3,6 +3,8 @@
 
   var API_BASE = window.ECHOFY_API_BASE || '';
   var fetchOpts = { credentials: 'include' };
+  var MSG_NET =
+    'Something went wrong. The team has been notified. Please try again shortly.';
 
   // Get user ID from query string: /user?id=123
   var params = new URLSearchParams(window.location.search);
@@ -70,9 +72,17 @@
 
       detailsEl.hidden = false;
     })
-    .catch(function () {
+    .catch(function (err) {
+      if (window.echofyReportClientBug) {
+        window.echofyReportClientBug({
+          scope: 'user_profile.public_load',
+          apiBasePresent: !!API_BASE,
+          errorMessage: err && err.message ? String(err.message) : 'request_failed',
+          userId: userId,
+        });
+      }
       usernameEl.textContent = 'Error';
-      errorEl.textContent = 'Network error loading profile.';
+      errorEl.textContent = MSG_NET;
       errorEl.hidden = false;
     });
 })();

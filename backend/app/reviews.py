@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import unicodedata
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
@@ -15,24 +16,35 @@ from app.models import ReviewLike, ReviewReaction, SongReview, User, utcnow_naiv
 
 reviews_bp = Blueprint("reviews", __name__, url_prefix="/api/reviews")
 
-# Allowlisted Discord-style reactions (exact grapheme strings; validated on POST).
-ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED: tuple[str, ...] = (
-    "🩷",
-    "💯",
-    "🫡",
-    "❤️‍🔥",
-    "👍🏼",
-    "👎🏼",
-    "💩",
-    "🎵",
-    "🎶",
-    "😂",
-    "😍",
-    "😡",
-    "💀",
-    "☠️",
+# Allowlisted Discord-style reactions (NFC-normalized graphemes; validated on POST/DELETE).
+ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED: tuple[str, ...] = tuple(
+    unicodedata.normalize(
+        "NFC",
+        e,
+    )
+    for e in (
+        "🩷",
+        "💯",
+        "🫡",
+        "❤️‍🔥",
+        "👍🏼",
+        "👎🏼",
+        "💩",
+        "🎵",
+        "🎶",
+        "😂",
+        "😍",
+        "😡",
+        "💀",
+        "☠️",
+    )
 )
 ALLOWED_REVIEW_REACTION_EMOJIS = frozenset(ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED)
+
+
+def _normalize_reaction_emoji(raw: str) -> str:
+    s = unicodedata.normalize("NFC", (raw or "").strip())
+    return s[:32]
 
 
 def _clean_string(value, max_len: int, default: str = "") -> str:
@@ -426,12 +438,15 @@ def unlike_review(review_id: int):
 
 
 def _parse_reaction_emoji() -> str | None:
+    """JSON body preferred; for DELETE, query `emoji` is supported (some proxies strip DELETE bodies)."""
     data = request.get_json(silent=True) or {}
     raw = data.get("emoji")
+    if (raw is None or raw == "") and request.method == "DELETE":
+        raw = request.args.get("emoji")
     if raw is None or not isinstance(raw, str):
         return None
-    emoji = raw.strip()
-    if not emoji or len(emoji) > 32:
+    emoji = _normalize_reaction_emoji(raw)
+    if not emoji:
         return None
     return emoji if emoji in ALLOWED_REVIEW_REACTION_EMOJIS else None
 

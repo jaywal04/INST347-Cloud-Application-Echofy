@@ -5,7 +5,9 @@ Interactive admin tool for managing the database.
 
 Usage (from repo root, with venv activated and ``pip install -r requirements.txt``):
 
-    python backend/admin/admin_cli.py
+    python backend/app/admin/admin_cli.py
+
+Or from the ``backend`` directory: ``python -m app.admin.admin_cli``
 """
 
 from __future__ import annotations
@@ -14,9 +16,9 @@ import os
 import sys
 from pathlib import Path
 
-# Add the backend package root so we can import app.*
-_REPO = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_REPO / "backend"))
+# ``__file__`` is backend/app/admin/admin_cli.py → parents[2] is the backend folder (app package root).
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_BACKEND_ROOT))
 
 from flask import Flask
 from sqlalchemy import func, inspect, or_, text

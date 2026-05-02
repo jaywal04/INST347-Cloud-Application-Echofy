@@ -5,7 +5,7 @@
 | `frontend/public/` | Built static site (served locally and deployed to Azure Static Web Apps) |
 | `frontend/snippets/` | Shared HTML layout, per-page body fragments, and footers — run `python scripts/render_static_html.py` to regenerate `public/*.html` |
 | `scripts/` | `render_static_html.py` and `prototypes/` course scripts |
-| `backend/admin/` | Optional `admin_cli.py` (database admin console) |
+| `backend/app/admin/` | Optional `admin_cli.py` (database admin console) |
 | `backend/app/` | Backend application package (API, services, auth, database) |
 | `Dockerfile` | Optional container image for Azure Container Apps (App Service uses GitHub Actions + `backend/startup.sh`) |
 
@@ -175,7 +175,7 @@ For local testing against a remote API, copy [`frontend/public/echofy-config.exa
 
 ### Database admin CLI
 
-From the repo root (venv activated): **`python backend/admin/admin_cli.py`**. Loads `app` from `backend/` using the same `.env` database settings as the server.
+From the repo root (venv activated): **`python backend/app/admin/admin_cli.py`**, or from the `backend` folder: **`python -m app.admin.admin_cli`**. Loads `app` from `backend/` using the same `.env` database settings as the server.
 
 ### Discord bug alerts (optional)
 

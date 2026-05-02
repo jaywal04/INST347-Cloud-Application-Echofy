@@ -5,6 +5,14 @@
   var spotifyItems = [];
   var authUserId = null;
 
+  function normReactionEmoji(s) {
+    try {
+      return String(s || '').normalize('NFC');
+    } catch (e) {
+      return String(s || '');
+    }
+  }
+
   /** Must match server `ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED` (browse picker + sort tie-break). */
   var REACTION_ORDER = [
     '🩷',
@@ -172,7 +180,7 @@
     var mineArr = r.my_reactions || [];
     var mine = {};
     mineArr.forEach(function (e) {
-      mine[e] = true;
+      mine[normReactionEmoji(e)] = true;
     });
     /* Preserve API key order = first reaction on this review first (not by count). */
     var chips = Object.keys(counts).filter(function (e) {
@@ -181,16 +189,16 @@
     var chipsHtml = chips
       .map(function (em) {
         var c = counts[em];
-        var active = mine[em] ? ' is-mine' : '';
+        var active = mine[normReactionEmoji(em)] ? ' is-mine' : '';
         return (
           '<button type="button" class="review-reaction-chip' +
           active +
           '" data-review-reaction="' +
           String(r.id) +
           '" data-emoji="' +
-          escapeHtml(em) +
+          em +
           '" aria-label="Reaction ' +
-          escapeHtml(em) +
+          em +
           ', ' +
           c +
           '">' +
@@ -210,7 +218,7 @@
           '<button type="button" class="review-reaction-picker-btn" data-review-reaction-pick="' +
           String(r.id) +
           '" data-emoji="' +
-          escapeHtml(em) +
+          em +
           '">' +
           em +
           '</button>'
@@ -668,7 +676,7 @@
         ev.preventDefault();
         ev.stopPropagation();
         var ridPick = parseInt(pickEm.getAttribute('data-review-reaction-pick'), 10);
-        var emPick = pickEm.getAttribute('data-emoji');
+        var emPick = normReactionEmoji(pickEm.getAttribute('data-emoji'));
         if (!ridPick || !emPick) return;
         var basePick = apiBase();
         if (!basePick) return;
@@ -676,15 +684,18 @@
         var mineSet = {};
         (rowPick ? rowPick.querySelectorAll('.review-reaction-chip.is-mine') : []).forEach(function (c) {
           var e = c.getAttribute('data-emoji');
-          if (e) mineSet[e] = true;
+          if (e) mineSet[normReactionEmoji(e)] = true;
         });
         var method = mineSet[emPick] ? 'DELETE' : 'POST';
-        fetch(basePick + '/api/reviews/' + ridPick + '/reactions', {
-          method: method,
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ emoji: emPick }),
-        })
+        var urlPick = basePick + '/api/reviews/' + ridPick + '/reactions';
+        var reqPick = { method: method, credentials: 'include' };
+        if (method === 'DELETE') {
+          urlPick += '?' + new URLSearchParams({ emoji: emPick }).toString();
+        } else {
+          reqPick.headers = { 'Content-Type': 'application/json' };
+          reqPick.body = JSON.stringify({ emoji: emPick });
+        }
+        fetch(urlPick, reqPick)
           .then(function (res) {
             return res.json().then(function (data) {
               return { ok: res.ok, data: data };
@@ -703,17 +714,20 @@
         ev.preventDefault();
         ev.stopPropagation();
         var ridC = parseInt(chip.getAttribute('data-review-reaction'), 10);
-        var emC = chip.getAttribute('data-emoji');
+        var emC = normReactionEmoji(chip.getAttribute('data-emoji'));
         if (!ridC || !emC) return;
         var baseC = apiBase();
         if (!baseC) return;
         var isMine = chip.classList.contains('is-mine');
-        fetch(baseC + '/api/reviews/' + ridC + '/reactions', {
-          method: isMine ? 'DELETE' : 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ emoji: emC }),
-        })
+        var urlC = baseC + '/api/reviews/' + ridC + '/reactions';
+        var reqC = { method: isMine ? 'DELETE' : 'POST', credentials: 'include' };
+        if (isMine) {
+          urlC += '?' + new URLSearchParams({ emoji: emC }).toString();
+        } else {
+          reqC.headers = { 'Content-Type': 'application/json' };
+          reqC.body = JSON.stringify({ emoji: emC });
+        }
+        fetch(urlC, reqC)
           .then(function (res) {
             return res.json().then(function (data) {
               return { ok: res.ok, data: data };

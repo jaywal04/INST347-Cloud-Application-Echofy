@@ -3,6 +3,17 @@
 
   var API_BASE = window.ECHOFY_API_BASE || '';
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+
+  if (API_BASE) {
+    fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.authenticated) {
+          window.location.href = '/login';
+        }
+      })
+      .catch(function () { window.location.href = '/login'; });
+  }
   var searchTimer = null;
   var MSG_NET =
     'Something went wrong. The team has been notified. Please try again shortly.';

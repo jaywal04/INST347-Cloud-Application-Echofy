@@ -79,7 +79,6 @@
     var activeFriends = pathParts.length === 1 && p0 === 'friends';
     appendNavLinks([
       { href: '/discover', text: 'Discover', active: activeDiscover },
-      { href: '/friends', text: 'Friends', active: activeFriends },
       { href: '#', text: 'Your Echo', active: false },
     ]);
   }

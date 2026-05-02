@@ -6,6 +6,31 @@
     'Something went wrong. The team has been notified. Please try again shortly.';
   var STORAGE_KEY = 'echofy-discover-shortlist';
 
+  var echofy_authenticated = false;
+
+  function refreshAuthButtons() {
+    var display = echofy_authenticated ? '' : 'none';
+    document.querySelectorAll('[data-save-item], [data-remove-item], [data-review-item]').forEach(function (btn) {
+      btn.style.display = display;
+    });
+    if (connectLink) {
+      if (!echofy_authenticated) {
+        connectLink.hidden = true;
+        connectLink.style.display = 'none';
+      }
+    }
+  }
+
+  if (API_BASE) {
+    fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        echofy_authenticated = !!(data && data.authenticated);
+        refreshAuthButtons();
+      })
+      .catch(function () {});
+  }
+
   function reportDiscover(scope, err, extra) {
     if (window.echofyReportClientBug) {
       window.echofyReportClientBug(
@@ -659,6 +684,7 @@
       saveBtn.className = 'btn-ghost btn-sm';
       saveBtn.textContent = opts.remove ? 'Remove' : isSaved(item) ? 'Saved' : 'Save';
       saveBtn.setAttribute(opts.remove ? 'data-remove-item' : 'data-save-item', itemKey(item));
+      saveBtn.style.display = echofy_authenticated ? '' : 'none';
       actions.appendChild(saveBtn);
 
       var reviewBtn = document.createElement('button');
@@ -666,6 +692,7 @@
       reviewBtn.className = 'btn-ghost btn-sm';
       reviewBtn.textContent = review ? 'Edit review' : 'Rate / Review';
       reviewBtn.setAttribute('data-review-item', itemKey(item));
+      reviewBtn.style.display = echofy_authenticated ? '' : 'none';
       actions.appendChild(reviewBtn);
     }
 

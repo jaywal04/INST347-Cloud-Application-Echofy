@@ -73,8 +73,10 @@ class ReviewLike(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
+    # NO ACTION on user_id: SQL Server rejects two CASCADE paths (users→likes and users→reviews→likes).
+    # Likes this user gave must be removed in app code before deleting the user (see delete_account).
     user_id = db.Column(
-        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
     )
     song_review_id = db.Column(
         db.Integer, db.ForeignKey("song_reviews.id", ondelete="CASCADE"), nullable=False, index=True

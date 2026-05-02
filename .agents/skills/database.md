@@ -40,7 +40,7 @@ Priority:
 | `pending_verifications` | Email codes for signup / delete flows |
 | `friend_requests` | Directed requests (`from_user_id`, `to_user_id`, `status`); unique on (from, to); FK `NO ACTION` to satisfy SQL Server cascade rules |
 | `song_reviews` | Per-user ratings/reviews keyed by `item_hash` (SHA-256 of canonical item key); unique (user_id, item_hash) |
-| `review_likes` | `ReviewLike` — logged-in user likes another user’s review; **DB unique** on `(user_id, song_review_id)` (one like per user per review; startup `schema_sync` dedupes legacy rows and adds the index if missing); FKs cascade |
+| `review_likes` | `ReviewLike` — likes on reviews; **unique** `(user_id, song_review_id)`; `song_review_id` **ON DELETE CASCADE** (deleting a review removes its likes); `user_id` **ON DELETE NO ACTION** so SQL Server avoids error 1785 (multiple cascade paths from `users`). Account deletion removes the user’s like rows in app code before deleting `users`. |
 
 ## Time storage
 

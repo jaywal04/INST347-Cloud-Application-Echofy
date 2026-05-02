@@ -43,7 +43,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'echofy-backend'
+          app-name: 'echofy-backend-web'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_73957AD96B5247D9B3563E628608FDE0 }}
           package: ./deploy

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import sys
 import threading
@@ -177,6 +178,25 @@ def _echofy_cors_allowed_origins() -> list[str]:
         if p.scheme in ("http", "https") and p.netloc:
             add(f"{p.scheme}://{p.netloc}")
 
+    # www <-> apex for common custom domains (e.g. ECHOFY_SWA_URL=https://dazify.xyz also allows www).
+    _ipv4 = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
+    for o in list(out):
+        p = urlparse(o)
+        scheme = p.scheme
+        host = (p.hostname or "").lower()
+        if scheme not in ("http", "https") or not host:
+            continue
+        if host in ("localhost", "127.0.0.1", "::1"):
+            continue
+        if _ipv4.match(host):
+            continue
+        if host.startswith("www."):
+            rest = host[4:]
+            if rest:
+                add(f"{scheme}://{rest}")
+        elif len(host.split(".")) == 2:
+            add(f"{scheme}://www.{host}")
+
     return out
 
 
@@ -246,6 +266,20 @@ def create_app() -> Flask:
         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     )
+
+    if os.environ.get("WEBSITE_HOSTNAME", "").strip():
+        https_public = [
+            c
+            for c in cors_origins
+            if c.startswith("https://")
+            and "localhost" not in c
+            and "127.0.0.1" not in c
+        ]
+        if not https_public:
+            app.logger.warning(
+                "ECHOFY: No HTTPS frontend origin in CORS. Set ECHOFY_SWA_URL or "
+                "ECHOFY_CORS_ORIGINS (e.g. https://dazify.xyz) on App Service and restart."
+            )
 
     # --- Database & Auth ---
     init_db(app)

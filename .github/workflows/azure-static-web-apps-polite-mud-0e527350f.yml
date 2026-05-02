@@ -19,6 +19,20 @@ jobs:
         with:
           submodules: false
           lfs: false
+      - name: Write echofy-config.json for browser API base URL
+        env:
+          ECHOFY_BACKEND_URL: ${{ secrets.ECHOFY_BACKEND_URL }}
+        run: |
+          python3 -c "
+          import json, os, pathlib
+          base = (os.environ.get('ECHOFY_BACKEND_URL') or '').strip().rstrip('/')
+          pathlib.Path('frontend/public/echofy-config.json').write_text(
+              json.dumps({'apiBase': base}, separators=(',', ':')),
+              encoding='utf-8',
+          )
+          "
+      - name: Render static HTML from snippets
+        run: python scripts/render_static_html.py
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1

@@ -29,8 +29,10 @@ ratings = {
 
 songs = sorted({song for user_ratings in ratings.values() for song in user_ratings})
 
+
 def build_vector(user):
     return [ratings[user].get(song, 0) for song in songs]
+
 
 def cosine_similarity(user_a, user_b):
     a = build_vector(user_a)
@@ -44,6 +46,7 @@ def cosine_similarity(user_a, user_b):
         return 0
 
     return dot / (mag_a * mag_b)
+
 
 def recommend_songs(target_user, top_n=3):
     scores = {}
@@ -69,6 +72,7 @@ def recommend_songs(target_user, top_n=3):
 
     recommendations.sort(key=lambda item: item[1], reverse=True)
     return recommendations[:top_n]
+
 
 target_user = "Nathan"
 

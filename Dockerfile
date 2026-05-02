@@ -1,4 +1,5 @@
-# Echofy API for Azure Container Apps (and local `docker build`).
+# Echofy API for Azure Container Apps and local `docker build` (optional).
+# App Service deployments use `.github/workflows/main_echofy-backend.yml` and `backend/startup.sh` instead.
 # Ingress target port should be 8080 on the Container App.
 
 FROM python:3.12-slim-bookworm

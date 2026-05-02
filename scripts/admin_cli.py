@@ -3,19 +3,20 @@ Echofy Admin CLI
 ~~~~~~~~~~~~~~~~
 Interactive admin tool for managing the database.
 
-Usage:
-    cd backend
-    python admin.py
+Usage (from repo root, with venv activated and ``pip install -r requirements.txt``):
+
+    python scripts/admin_cli.py
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from textwrap import indent
+from pathlib import Path
 
-# Add the backend directory to sys.path so we can import app.*
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# Add the backend package root so we can import app.*
+_REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO / "backend"))
 
 from flask import Flask
 from sqlalchemy import func, inspect, or_, text

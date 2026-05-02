@@ -21,5 +21,8 @@ Thumbs.db
 # Testing / local
 *.log
 
+# Production API URL for Static Web Apps (CI writes this; optional local copy)
+frontend/public/echofy-config.json
+
 # Editor/temp backup files
 .~*

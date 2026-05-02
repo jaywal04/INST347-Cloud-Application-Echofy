@@ -1,19 +1,6 @@
 (function () {
   'use strict';
 
-  var host = window.location.hostname;
-  var API_BASE;
-  if (host === 'localhost') {
-    API_BASE = 'http://localhost:5001';
-  } else if (host === '127.0.0.1') {
-    API_BASE = 'http://127.0.0.1:5001';
-  } else {
-    API_BASE = 'https://echofy-backend-c7b8a0are7abgxhn.canadacentral-01.azurewebsites.net';
-  }
-  if (!window.ECHOFY_API_BASE) {
-    window.ECHOFY_API_BASE = API_BASE;
-  }
-
   var STATIC_FIRST_SEGMENTS = { css: 1, js: 1, assets: 1, fonts: 1 };
   var APP_PAGES = {
     discovery: 1,

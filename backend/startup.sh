@@ -7,5 +7,7 @@ echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://
 apt-get update
 ACCEPT_EULA=Y apt-get install -y msodbcsql18
 
+# Azure App Service sets PORT; default for local/smoke runs.
+PORT="${PORT:-8000}"
 # Start gunicorn
-gunicorn --bind=0.0.0.0 --timeout 600 app.main:app
+exec gunicorn --bind="0.0.0.0:${PORT}" --timeout 600 app.main:app

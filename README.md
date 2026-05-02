@@ -2,13 +2,13 @@
 
 | Path | Purpose |
 |------|---------|
-| `frontend/public/` | Static site served locally and deployed to Azure Static Web Apps |
-| `frontend/src/` | Front-end source (framework code, bundles) as you grow beyond plain HTML/CSS/JS |
+| `frontend/public/` | Built static site (served locally and deployed to Azure Static Web Apps) |
+| `frontend/snippets/` | Shared HTML layout, per-page body fragments, and footers — run `python scripts/render_static_html.py` to regenerate `public/*.html` |
+| `scripts/` | `render_static_html.py`, optional `admin_cli.py`, and `prototypes/` course scripts |
 | `backend/app/` | Backend application package (API, services, auth, database) |
-| `backend/tests/` | Backend tests |
-| `api/` | Optional Azure Static Web Apps Functions (set `api_location` in the workflow when used) |
+| `Dockerfile` | Optional container image for Azure Container Apps (App Service uses GitHub Actions + `backend/startup.sh`) |
 
-The prototype script `echofy_model_prototype.py` lives in `backend/` at the repo root of that folder.
+The cosine-similarity prototype script lives at [`scripts/prototypes/echofy_model_prototype.py`](scripts/prototypes/echofy_model_prototype.py) (run with `python scripts/prototypes/echofy_model_prototype.py`). After editing HTML snippets, run **`python scripts/render_static_html.py`** from the repo root before committing changes to pages under `frontend/public/`. CI runs the same step before each Static Web Apps deploy.
 
 ### Key frontend pages
 
@@ -69,11 +69,11 @@ Copy `.env.example` to `.env` in the repo root and fill in your values. See the 
 
 | Service | Port | How to run |
 |---------|------|------------|
-| Both at once | **3000** + **5000** | `start.bat` (Windows) or `./start.sh` (macOS / Linux) opens two terminal windows |
-| Frontend only | **3000** | `start.bat frontend` or `./start.sh frontend` (optional: `PORT=8080 ./start.sh frontend`) |
-| Backend only | **5000** | `start.bat backend` or `./start.sh backend` (optional: `PORT=5001 ./start.sh backend`) |
+| Both at once | **3001** + **5001** | `start.bat` (Windows) or `./start.sh` (macOS / Linux) opens two terminal windows |
+| Frontend only | **3001** | `start.bat frontend` or `./start.sh frontend` (optional: `PORT=8080 ./start.sh frontend`) |
+| Backend only | **5001** | `start.bat backend` or `./start.sh backend` (optional: `PORT=5001 ./start.sh backend`) |
 
-Check the API with [http://127.0.0.1:5000/api/health](http://127.0.0.1:5000/api/health).
+Check the API with [http://127.0.0.1:5001/api/health](http://127.0.0.1:5001/api/health).
 
 **macOS note:** Run `./start.sh` from the Terminal app. Double-clicking the file in Finder will open it in a text editor. If you get a “permission denied” error, run `chmod +x start.sh` first.
 
@@ -127,11 +127,11 @@ The app switches automatically — no code changes needed. You can also set `DAT
 
 ## Spotify (Discover page)
 
-1. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), add a **Redirect URI** that matches **`SPOTIFY_REDIRECT_URI`** in your `.env` (default `http://127.0.0.1:5000/callback`). Spotify often rejects `localhost`; **`127.0.0.1`** is fine.
+1. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), add a **Redirect URI** that matches **`SPOTIFY_REDIRECT_URI`** in your `.env` (default `http://127.0.0.1:5001/callback`). Spotify often rejects `localhost`; **`127.0.0.1`** is fine.
 2. Set **`SPOTIFY_CLIENT_ID`** and **`SPOTIFY_CLIENT_SECRET`** in repo-root `.env` (see [`.env.example`](.env.example)). Older **`JAY_SPOTIFY_*`** names are still read if the `SPOTIFY_*` variables are empty.
-3. **Connect Spotify** on the Discover page (or open `http://127.0.0.1:5000/auth/spotify`) to sign in; after callback, **your top tracks** are used when you click “Show top Spotify music,” with chart fallbacks when needed.
+3. **Connect Spotify** on the Discover page (or open `http://127.0.0.1:5001/auth/spotify`) to sign in; after callback, **your top tracks** are used when you click “Show top Spotify music,” with chart fallbacks when needed.
 4. Without a connected session, **Client Credentials** loads chart-style data (Top 50 if allowed, else new releases / featured playlists) when ID and secret are set.
-5. For local OAuth, open the frontend at **`http://127.0.0.1:3000`** (not `localhost`) so the session cookie is sent to **`http://127.0.0.1:5000`** on API calls.
+5. For local OAuth, use the frontend at **`http://localhost:3001`** or **`http://127.0.0.1:3001`**; the static `js/apiBase.js` points API calls at **`http://127.0.0.1:5001`** or **`http://localhost:5001`** as appropriate.
 6. Optional **`SPOTIFY_TOKEN`**: same behavior as a connected user token without the browser flow (legacy **`JAY_SPOTIFY_TOKEN`** if `SPOTIFY_TOKEN` is empty).
 
 <hr>
@@ -142,7 +142,7 @@ All variables go in a `.env` file at the repo root. The static frontend does **n
 
 | Variable | Purpose |
 |----------|---------|
-| `PORT` | Flask port (default `5000`). |
+| `PORT` | Flask port (default `5001` in code; Azure App Service sets this automatically). |
 | `FLASK_SECRET_KEY` | Signs session cookies; change for production. |
 | **Spotify** | |
 | `SPOTIFY_CLIENT_ID` | Spotify Client ID (`JAY_SPOTIFY_CLIENT_ID` if empty). |
@@ -157,3 +157,13 @@ All variables go in a `.env` file at the repo root. The static frontend does **n
 | **Azure Blob (profile photos)** | |
 | `AZURE_STORAGE_CONNECTION_STRING` | Storage account connection string; enables `POST/DELETE /api/auth/profile/photo`. |
 | `AZURE_STORAGE_CONTAINER_PROFILES` | Blob container name (default `echofy-profiles`). |
+| **CORS / Static Web Apps** | |
+| `ECHOFY_SWA_URL`, `ECHOFY_CORS_ORIGINS`, … | Comma-separated allowed browser origins for the API (see [`.env.example`](.env.example)). |
+
+### Static Web Apps (frontend) and API base URL
+
+The browser loads **`/echofy-config.json`** on the deployed site to read `{ "apiBase": "https://your-backend..." }`. GitHub Actions writes that file before deploy using the repository secret **`ECHOFY_BACKEND_URL`** (HTTPS API origin, no trailing slash). For local testing against a remote API, copy [`frontend/public/echofy-config.example.json`](frontend/public/echofy-config.example.json) to `frontend/public/echofy-config.json` (that file is gitignored).
+
+### Database admin CLI
+
+From the repo root (venv activated): **`python scripts/admin_cli.py`**. Loads `app` from `backend/` using the same `.env` database settings as the server.

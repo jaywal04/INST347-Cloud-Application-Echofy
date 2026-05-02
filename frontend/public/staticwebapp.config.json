@@ -3,6 +3,7 @@
     { "route": "/login*", "rewrite": "/login.html" },
     { "route": "/signup*", "rewrite": "/signup.html" },
     { "route": "/discover*", "rewrite": "/discover.html" },
+    { "route": "/review*", "rewrite": "/review.html" },
     { "route": "/friends*", "rewrite": "/friends.html" },
     { "route": "/profile*", "rewrite": "/profile.html" },
     { "route": "/notifications*", "rewrite": "/notifications.html" },

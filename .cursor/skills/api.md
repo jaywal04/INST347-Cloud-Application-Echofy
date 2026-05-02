@@ -72,7 +72,11 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/reviews/recent` | No | Recent reviews feed (for landing) |
+| GET | `/api/reviews/recent` | No | Recent reviews feed (for landing); each review includes `username`, `user_id`, `like_count`, `liked_by_me` (session-aware) |
+| GET | `/api/reviews/browse` | No | Public browse: `sort` (`top` = most **community likes** then star rating, default; also `recent`, `oldest`, `least`), `category` (`all` default, `tracks`, `albums`, `artists`, `genres`), optional `q` or `search` (substring on title, artists, album, review text; max 120 chars), `limit` (default 50, max 100), `offset`; each row includes `username`, `user_id`, `like_count`, `liked_by_me` |
+| POST | `/api/reviews/for-item` | No | Public read: JSON `{ "item": { ... } }` — Spotify **track** only (`type` track, `name`, `url` open.spotify.com/track or spotify:track:); returns `reviews` ordered by likes then rating (same hash as Discover), `item_key`, `item` echo; reviews include `like_count` / `liked_by_me` |
+| POST | `/api/reviews/<int:review_id>/like` | Yes | Like a review (not your own); idempotent if already liked; returns `like_count`, `liked_by_me` |
+| DELETE | `/api/reviews/<int:review_id>/like` | Yes | Remove your like; returns `like_count`, `liked_by_me` |
 | GET | `/api/reviews` | Yes | Current user’s reviews (up to 200) |
 | POST | `/api/reviews` | Yes | Create or update review (JSON `item`, `rating`, optional `text`, `item_key`) |
 

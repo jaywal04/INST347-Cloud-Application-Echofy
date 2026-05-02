@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/" />
+  <title>Reviews — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <div id="navbar"></div>
+  <script src="js/apiBase.js"></script>
+  <script src="js/pathContext.js"></script>
+  <script src="js/navbar.js"></script>
+  <script src="js/bugReport.js"></script>
+
+  <main class="discover-page reviews-browse-page">
+    <header class="discover-header">
+      <p class="hero-eyebrow discover-eyebrow">Community</p>
+      <h1 class="discover-title">Browse reviews</h1>
+      <p class="discover-lead">Search Spotify to pick the exact track (same name, different songs), then read reviews for that title. Or search text across all reviews.</p>
+    </header>
+
+    <section class="reviews-browse-search" aria-label="Search tracks or reviews">
+      <label class="reviews-browse-search-label" for="reviews-search">Search</label>
+      <div class="reviews-browse-search-row">
+        <input
+          type="search"
+          id="reviews-search"
+          class="reviews-browse-search-input"
+          placeholder="Track or artist name for Spotify…"
+          maxlength="120"
+          autocomplete="off"
+        />
+        <button type="button" class="btn-primary" id="reviews-search-btn">Search Spotify</button>
+        <button type="button" class="btn-ghost btn-sm" id="reviews-text-search-btn">Search review text</button>
+        <button type="button" class="btn-ghost btn-sm" id="reviews-search-clear" hidden>Clear</button>
+      </div>
+    </section>
+
+    <p id="reviews-spotify-status" class="discover-hint reviews-spotify-status" role="status" hidden></p>
+    <div id="reviews-spotify-results" class="reviews-spotify-results" hidden></div>
+
+    <div id="reviews-selected-panel" class="reviews-selected-panel" hidden>
+      <div class="reviews-selected-row">
+        <button type="button" class="btn-ghost btn-sm" id="reviews-back-from-track">Back</button>
+        <div class="reviews-selected-meta">
+          <div class="reviews-selected-title" id="reviews-selected-title"></div>
+          <div class="reviews-selected-sub" id="reviews-selected-sub"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="reviews-for-item-cta" class="reviews-for-item-cta" hidden>
+      <p class="reviews-for-item-cta-text">
+        There’s no review for <strong id="reviews-for-item-cta-track"></strong> yet. Want to be the first?
+      </p>
+      <a href="/discover" class="btn-primary">Review on Discover</a>
+    </div>
+
+    <section class="reviews-browse-toolbar" aria-label="Review filters">
+      <div class="reviews-browse-filters">
+        <label class="reviews-browse-label">
+          <span>Sort by</span>
+          <select id="reviews-sort" class="reviews-browse-select">
+            <option value="top" selected>Most liked</option>
+            <option value="recent">Most recent</option>
+            <option value="oldest">Oldest first</option>
+            <option value="least">Lowest rated</option>
+          </select>
+        </label>
+        <label class="reviews-browse-label">
+          <span>Category</span>
+          <select id="reviews-category" class="reviews-browse-select">
+            <option value="all" selected>All</option>
+            <option value="tracks">Tracks</option>
+            <option value="albums">Albums</option>
+            <option value="artists">Artists</option>
+            <option value="genres">Genres</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <p id="reviews-browse-empty" class="discover-hint" hidden>No reviews match these filters yet.</p>
+    <div class="reviews-list" id="reviews-browse-list"></div>
+  </main>
+  <footer>
+    <span>© 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="/">Home</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/reviews-browse.js" defer></script>
+</body>
+</html>

@@ -37,6 +37,7 @@ _RESERVED_USERNAMES = frozenset(
         "profile",
         "notifications",
         "user",
+        "review",
         "css",
         "js",
         "index",

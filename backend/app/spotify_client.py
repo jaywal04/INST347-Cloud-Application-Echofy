@@ -795,7 +795,7 @@ def search_spotify_for_response(
             400,
         )
 
-    token, _token_source, token_error = _resolve_spotify_token(
+    token, token_source, token_error = _resolve_spotify_token(
         client_id=client_id,
         client_secret=client_secret,
         legacy_user_token=legacy_user_token,
@@ -811,6 +811,8 @@ def search_spotify_for_response(
             },
             503,
         )
+
+    used_client_credentials_fallback = False
 
     if kind == "genre":
         needle = q.lower()
@@ -836,6 +838,20 @@ def search_spotify_for_response(
         params=params,
         timeout=_REQUEST_TIMEOUT,
     )
+    # Catalog search works with client credentials; expired user/session tokens should not break it.
+    if res.status_code == 401 and token_source == "user":
+        cid, csec = client_id.strip(), client_secret.strip()
+        if cid and csec:
+            cc_token, _cc_err = _get_client_credentials_token(cid, csec)
+            if cc_token:
+                res = requests.get(
+                    f"{SPOTIFY_API}/search",
+                    headers=_headers(cc_token),
+                    params=params,
+                    timeout=_REQUEST_TIMEOUT,
+                )
+                used_client_credentials_fallback = True
+
     if res.status_code != 200:
         try:
             detail = res.json().get("error", {}).get("message", "") or res.text[:200]
@@ -857,15 +873,18 @@ def search_spotify_for_response(
         if item:
             items.append(item)
 
-    return (
-        {
-            "source": "spotify_search",
-            "query": q,
-            "type": kind,
-            "items": items,
-        },
-        200,
-    )
+    payload: dict[str, Any] = {
+        "source": "spotify_search",
+        "query": q,
+        "type": kind,
+        "items": items,
+    }
+    if used_client_credentials_fallback:
+        payload["spotify_session_note"] = (
+            "Your Spotify login expired; search used the app catalog instead. "
+            "Open Discover and use Connect Spotify if you want a fresh session."
+        )
+    return (payload, 200)
 
 
 def _get_playlist_items_first_page(

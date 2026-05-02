@@ -45,8 +45,12 @@ python scripts/render_static_html.py
 
 Commit the updated `frontend/public/*.html`. CI runs the same step before Static Web Apps deploy.
 
-## Deep-dive docs (same folder)
+## Deep-dive docs (mirrored under `.cursor/skills/`, `.agents/skills/`, etc.)
 
+- `overview.md` — this file
+- `class-project.md` — course scope, “good enough,” what to skip
+- `local-dev.md` — venv, ports, start scripts, health check
+- `html-workflow.md` — snippets vs `public/`, render script
 - `frontend.md` — snippets, JS modules, API base, SWA routing
 - `backend.md` — app factory, sessions, CORS, blueprints
 - `api.md` — route catalog

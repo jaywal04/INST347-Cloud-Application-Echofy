@@ -1,6 +1,6 @@
 """Tiny static file server with clean-URL support.
 
-Requests for /discover  →  serves public/discover.html
+Requests for /discover, /review  →  serves public/discover.html, public/review.html
 Requests for /css/styles.css  →  serves public/css/styles.css
 Root /  →  serves public/index.html
 """
@@ -18,6 +18,7 @@ _USER_PAGE_HTML = {
     "discovery": "discover.html",
     "dashboard": "discover.html",
     "discover": "discover.html",
+    "review": "review.html",
     "friends": "friends.html",
     "profile": "profile.html",
     "notifications": "notifications.html",

@@ -25,6 +25,7 @@ PAGES: list[tuple[str, str, str, str, list[str]]] = [
     ("login.html", "Sign In — Echofy", "login", "login", ["auth.js"]),
     ("signup.html", "Sign Up — Echofy", "signup", "signup", ["auth.js"]),
     ("discover.html", "Discover — Echofy", "discover", "discover", ["discover.js"]),
+    ("review.html", "Reviews — Echofy", "review", "review", ["reviews-browse.js"]),
     ("friends.html", "Friends — Echofy", "friends", "friends", ["friends.js"]),
     ("profile.html", "Profile — Echofy", "profile", "profile", ["profile.js"]),
     (

@@ -6,6 +6,7 @@
     discovery: 1,
     dashboard: 1,
     discover: 1,
+    review: 1,
     friends: 1,
     profile: 1,
     notifications: 1,
@@ -22,7 +23,7 @@
     try {
       var u = new URL(stashed, window.location.origin);
       if (
-        /^\/[^/]+\/(discovery|dashboard|discover|friends|profile|notifications|user)(?:\/|$)/.test(
+        /^\/[^/]+\/(discovery|dashboard|discover|review|friends|profile|notifications|user)(?:\/|$)/.test(
           u.pathname
         )
       ) {

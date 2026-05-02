@@ -64,6 +64,24 @@ class FriendRequest(db.Model):
     to_user = db.relationship("User", foreign_keys=[to_user_id], backref=db.backref("friend_requests_received", lazy="dynamic"))
 
 
+class ReviewLike(db.Model):
+    """A logged-in user likes another user's review (one row per user per review)."""
+
+    __tablename__ = "review_likes"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "song_review_id", name="uq_review_likes_user_review"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    song_review_id = db.Column(
+        db.Integer, db.ForeignKey("song_reviews.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+
+
 class SongReview(db.Model):
     """A user's Spotify rating/review saved in the app database."""
 
@@ -99,6 +117,7 @@ class SongReview(db.Model):
         artists = [a.strip() for a in (self.artists or "").split(",") if a.strip()]
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "item_key": self.item_key,
             "rating": self.rating,
             "text": self.text or "",

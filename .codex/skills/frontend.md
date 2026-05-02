@@ -20,6 +20,7 @@ Do not hand-edit `public/*.html` for structural changes without updating snippet
 | `login.html` | login | `auth.js` |
 | `signup.html` | signup | `auth.js` |
 | `discover.html` | discover | `discover.js` |
+| `review.html` | review | `reviews-browse.js` — `GET /api/reviews/browse` (sort/category + optional text `q`); **Search Spotify** → `GET /api/spotify/search` then pick a track → `POST /api/reviews/for-item`; empty track reviews CTA links to `/discover` |
 | `friends.html` | friends | `friends.js` |
 | `profile.html` | profile | `profile.js` |
 | `notifications.html` | notifications | `notifications.js` |
@@ -48,7 +49,7 @@ The script fetches `/api/auth/me` and redirects to `/login` if unauthenticated, 
 
 ## Static Web Apps (`frontend/public/staticwebapp.config.json`)
 
-- Explicit rewrites map clean routes (`/login`, `/discover`, …) to `*.html`.
+- Explicit rewrites map clean routes (`/login`, `/discover`, `/review`, …) to `*.html`.
 - **`navigationFallback`** rewrites unknown paths to `echofy-path-bridge.html` (excludes `/css/*`, `/js/*`, `/.auth/*`, `/echofy-config.json`) so client-side routing / username paths can load the shell.
 
 ## Styling and assets

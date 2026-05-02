@@ -75,7 +75,12 @@
           '<div class="review-stars">' + starsHtml(r.rating) + '</div>' +
         '</div>' +
         (r.text ? '<p class="review-text">' + escapeHtml(r.text) + '</p>' : '') +
-        '<div class="review-time">' + timeAgo(r.updated_at) + '</div>';
+        '<div class="review-time">' +
+        timeAgo(r.updated_at) +
+        (typeof r.like_count === 'number' && r.like_count > 0
+          ? ' · ' + r.like_count + ' like' + (r.like_count === 1 ? '' : 's')
+          : '') +
+        '</div>';
 
       var card = document.createElement('div');
       card.className = 'review-item';
@@ -87,7 +92,7 @@
 
   var reviewsListEl = document.getElementById('recent-reviews-list');
   if (reviewsListEl) {
-    fetch((API_BASE || '') + '/api/reviews/recent')
+    fetch((API_BASE || '') + '/api/reviews/recent', { credentials: 'include' })
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data && data.ok) {

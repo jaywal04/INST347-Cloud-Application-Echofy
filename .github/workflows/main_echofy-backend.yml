@@ -45,5 +45,5 @@ jobs:
         with:
           app-name: 'echofy-backend'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_73957AD96B5247D9B3563E628608FDE0 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_0720655C5CF04C168833967243102F25 }}
           package: ./deploy

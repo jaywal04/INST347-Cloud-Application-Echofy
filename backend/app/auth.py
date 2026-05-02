@@ -19,7 +19,14 @@ from app.blob_storage import (
 )
 from app.database import db
 from app.email_service import send_verification_code
-from app.models import FriendRequest, PendingVerification, ReviewLike, User, utcnow_naive
+from app.models import (
+    FriendRequest,
+    PendingVerification,
+    ReviewLike,
+    ReviewReaction,
+    User,
+    utcnow_naive,
+)
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -440,6 +447,7 @@ def delete_account():
         or_(FriendRequest.from_user_id == user.id, FriendRequest.to_user_id == user.id)
     ).delete(synchronize_session=False)
     ReviewLike.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    ReviewReaction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
     db.session.delete(pv)
     logout_user()
     db.session.delete(user)

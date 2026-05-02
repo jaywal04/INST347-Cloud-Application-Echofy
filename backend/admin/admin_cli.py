@@ -5,7 +5,7 @@ Interactive admin tool for managing the database.
 
 Usage (from repo root, with venv activated and ``pip install -r requirements.txt``):
 
-    python scripts/admin_cli.py
+    python backend/admin/admin_cli.py
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 # Add the backend package root so we can import app.*
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO / "backend"))
 
 from flask import Flask

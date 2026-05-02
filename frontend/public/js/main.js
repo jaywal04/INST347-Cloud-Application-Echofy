@@ -33,6 +33,30 @@
     return html;
   }
 
+  function reactionSummaryHtml(r) {
+    var c = r.reaction_counts || {};
+    var keys = Object.keys(c).filter(function (k) {
+      return c[k] > 0;
+    });
+    if (!keys.length) return '';
+    return (
+      '<div class="review-reaction-inline">' +
+      keys
+        .map(function (k) {
+          var n = parseInt(c[k], 10) || 0;
+          return (
+            '<span class="review-reaction-inline-item">' +
+            k +
+            '<span class="review-reaction-inline-num">' +
+            String(n) +
+            '</span></span>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
   function renderRecentReviews(reviews) {
     var list = document.getElementById('recent-reviews-list');
     var emptyEl = document.getElementById('recent-reviews-empty');
@@ -80,7 +104,8 @@
         (typeof r.like_count === 'number' && r.like_count > 0
           ? ' · ' + r.like_count + ' like' + (r.like_count === 1 ? '' : 's')
           : '') +
-        '</div>';
+        '</div>' +
+        reactionSummaryHtml(r);
 
       var card = document.createElement('div');
       card.className = 'review-item';

@@ -84,6 +84,27 @@ class ReviewLike(db.Model):
     created_at = db.Column(db.DateTime, default=utcnow_naive)
 
 
+class ReviewReaction(db.Model):
+    """Discord-style emoji reaction on a review (allowlisted emoji only; one row per user per emoji per review)."""
+
+    __tablename__ = "review_reactions"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "song_review_id", "emoji", name="uq_review_reactions_user_review_emoji"
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
+    )
+    song_review_id = db.Column(
+        db.Integer, db.ForeignKey("song_reviews.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    emoji = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+
+
 class SongReview(db.Model):
     """A user's Spotify rating/review saved in the app database."""
 

@@ -9,7 +9,14 @@ from __future__ import annotations
 from sqlalchemy import Boolean, DateTime, Integer, String, inspect, text
 from sqlalchemy.schema import Column
 
-from app.models import FriendRequest, PendingVerification, ReviewLike, SongReview, User
+from app.models import (
+    FriendRequest,
+    PendingVerification,
+    ReviewLike,
+    ReviewReaction,
+    SongReview,
+    User,
+)
 
 
 def _quote_table_sqlite(name: str) -> str:
@@ -194,6 +201,61 @@ def ensure_review_likes_one_per_user(engine) -> None:
         conn.execute(idx)
 
 
+def _review_reactions_has_triple_unique(insp, table_name: str) -> bool:
+    for uc in insp.get_unique_constraints(table_name):
+        cols = {c.lower() for c in (uc.get("column_names") or [])}
+        if cols == {"user_id", "song_review_id", "emoji"}:
+            return True
+    for ix in insp.get_indexes(table_name):
+        if not ix.get("unique"):
+            continue
+        cols = {c.lower() for c in (ix.get("column_names") or [])}
+        if cols == {"user_id", "song_review_id", "emoji"}:
+            return True
+    return False
+
+
+def ensure_review_reactions_one_per_user_emoji(engine) -> None:
+    dialect_name = engine.dialect.name
+    if dialect_name not in ("sqlite", "mssql"):
+        return
+    table_name = ReviewReaction.__tablename__
+    insp = inspect(engine)
+    if not insp.has_table(table_name):
+        return
+    if _review_reactions_has_triple_unique(insp, table_name):
+        return
+
+    if dialect_name == "sqlite":
+        q = _quote_table_sqlite(table_name)
+        dedupe = text(
+            f"DELETE FROM {q} WHERE id NOT IN ("
+            f"SELECT MIN(id) FROM {q} GROUP BY user_id, song_review_id, emoji)"
+        )
+        idx = text(
+            f"CREATE UNIQUE INDEX IF NOT EXISTS uq_review_reactions_user_review_emoji "
+            f"ON {q} (user_id, song_review_id, emoji)"
+        )
+        with engine.begin() as conn:
+            conn.execute(dedupe)
+            conn.execute(idx)
+        return
+
+    q = _quote_table_mssql(table_name)
+    dedupe = text(
+        f"WITH d AS (SELECT id, ROW_NUMBER() OVER ("
+        f"PARTITION BY user_id, song_review_id, emoji ORDER BY id) AS rn FROM {q}) "
+        f"DELETE FROM {q} WHERE id IN (SELECT id FROM d WHERE rn > 1)"
+    )
+    idx = text(
+        f"CREATE UNIQUE NONCLUSTERED INDEX uq_review_reactions_user_review_emoji "
+        f"ON {q} (user_id, song_review_id, emoji)"
+    )
+    with engine.begin() as conn:
+        conn.execute(dedupe)
+        conn.execute(idx)
+
+
 def ensure_model_table_columns(engine) -> None:
     for table in (
         User.__table__,
@@ -201,6 +263,8 @@ def ensure_model_table_columns(engine) -> None:
         FriendRequest.__table__,
         SongReview.__table__,
         ReviewLike.__table__,
+        ReviewReaction.__table__,
     ):
         _ensure_table_columns(engine, table)
     ensure_review_likes_one_per_user(engine)
+    ensure_review_reactions_one_per_user_emoji(engine)

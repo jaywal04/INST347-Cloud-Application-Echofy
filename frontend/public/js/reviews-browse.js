@@ -5,6 +5,24 @@
   var spotifyItems = [];
   var authUserId = null;
 
+  /** Must match server `ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED` (browse picker + sort tie-break). */
+  var REACTION_ORDER = [
+    '🩷',
+    '💯',
+    '🫡',
+    '❤️‍🔥',
+    '👍🏼',
+    '👎🏼',
+    '💩',
+    '🎵',
+    '🎶',
+    '😂',
+    '😍',
+    '😡',
+    '💀',
+    '☠️',
+  ];
+
   function apiBase() {
     return typeof window.echofyApiBaseUrl === 'function'
       ? window.echofyApiBaseUrl()
@@ -106,20 +124,21 @@
       });
   }
 
-  function reviewLikeRowHtml(r) {
+  /** Like control on the right of the reaction row (same row as + and chips). */
+  function reviewLikeSlotHtml(r) {
     var n = typeof r.like_count === 'number' ? r.like_count : 0;
     var label = n + ' like' + (n === 1 ? '' : 's');
     var isOwn = authUserId != null && r.user_id === authUserId;
     if (isOwn || authUserId == null) {
       return (
-        '<div class="review-like-row"><span class="review-like-count">' +
+        '<div class="review-like-slot"><span class="review-like-count">' +
         escapeHtml(label) +
         '</span></div>'
       );
     }
     var liked = !!r.liked_by_me;
     return (
-      '<div class="review-like-row">' +
+      '<div class="review-like-slot">' +
       '<button type="button" class="review-like-btn' +
       (liked ? ' is-liked' : '') +
       '" data-review-like="' +
@@ -137,6 +156,123 @@
       '</span>' +
       '</div>'
     );
+  }
+
+  function closeAllReactionPickers() {
+    document.querySelectorAll('.review-reaction-picker').forEach(function (p) {
+      p.hidden = true;
+    });
+    document.querySelectorAll('.review-reaction-add').forEach(function (b) {
+      b.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function reviewReactionsRowHtml(r) {
+    var counts = r.reaction_counts || {};
+    var mineArr = r.my_reactions || [];
+    var mine = {};
+    mineArr.forEach(function (e) {
+      mine[e] = true;
+    });
+    /* Preserve API key order = first reaction on this review first (not by count). */
+    var chips = Object.keys(counts).filter(function (e) {
+      return counts[e] > 0;
+    });
+    var chipsHtml = chips
+      .map(function (em) {
+        var c = counts[em];
+        var active = mine[em] ? ' is-mine' : '';
+        return (
+          '<button type="button" class="review-reaction-chip' +
+          active +
+          '" data-review-reaction="' +
+          String(r.id) +
+          '" data-emoji="' +
+          escapeHtml(em) +
+          '" aria-label="Reaction ' +
+          escapeHtml(em) +
+          ', ' +
+          c +
+          '">' +
+          '<span class="review-reaction-emoji" aria-hidden="true">' +
+          em +
+          '</span><span class="review-reaction-count">' +
+          String(c) +
+          '</span></button>'
+        );
+      })
+      .join('');
+
+    var picker = '';
+    if (authUserId != null) {
+      var grid = REACTION_ORDER.map(function (em) {
+        return (
+          '<button type="button" class="review-reaction-picker-btn" data-review-reaction-pick="' +
+          String(r.id) +
+          '" data-emoji="' +
+          escapeHtml(em) +
+          '">' +
+          em +
+          '</button>'
+        );
+      }).join('');
+      picker =
+        '<div class="review-reaction-picker-wrap">' +
+        '<button type="button" class="review-reaction-add" data-review-reaction-open="' +
+        String(r.id) +
+        '" aria-expanded="false" aria-haspopup="true" aria-label="Add reaction">+</button>' +
+        '<div class="review-reaction-picker" hidden role="menu">' +
+        grid +
+        '</div></div>';
+    }
+
+    return (
+      '<div class="review-reaction-row" data-review-id="' +
+      String(r.id) +
+      '" data-review-user-id="' +
+      escapeHtml(String(r.user_id != null ? r.user_id : '')) +
+      '">' +
+      picker +
+      '<div class="review-reaction-chips">' +
+      chipsHtml +
+      '</div>' +
+      reviewLikeSlotHtml(r) +
+      '</div>'
+    );
+  }
+
+  function replaceReactionRow(reviewId, payload) {
+    var row = document.querySelector('.review-reaction-row[data-review-id="' + String(reviewId) + '"]');
+    if (!row || !payload) return;
+    var uidStr = row.getAttribute('data-review-user-id') || '';
+    var uid = uidStr === '' ? null : parseInt(uidStr, 10);
+    if (isNaN(uid)) uid = null;
+
+    var n = typeof payload.like_count === 'number' ? payload.like_count : null;
+    var liked = typeof payload.liked_by_me === 'boolean' ? payload.liked_by_me : null;
+    if (n === null) {
+      var likeNumEl = row.querySelector('.review-like-num');
+      var likeCountEl = row.querySelector('.review-like-slot .review-like-count');
+      if (likeNumEl) n = parseInt(likeNumEl.textContent, 10) || 0;
+      else if (likeCountEl) {
+        var m = (likeCountEl.textContent || '').match(/(\d+)/);
+        n = m ? parseInt(m[1], 10) : 0;
+      } else n = 0;
+    }
+    if (liked === null) {
+      var lb = row.querySelector('.review-like-btn');
+      liked = !!(lb && lb.classList.contains('is-liked'));
+    }
+
+    var fake = {
+      id: reviewId,
+      user_id: uid,
+      reaction_counts: payload.reaction_counts || {},
+      my_reactions: payload.my_reactions || [],
+      like_count: n,
+      liked_by_me: liked,
+    };
+    row.outerHTML = reviewReactionsRowHtml(fake);
   }
 
   function appendReviewCards(list, reviews) {
@@ -184,7 +320,7 @@
         '<div class="review-time">' +
         timeAgo(r.updated_at) +
         '</div>' +
-        reviewLikeRowHtml(r);
+        reviewReactionsRowHtml(r);
 
       var card = document.createElement('div');
       card.className = 'review-item';
@@ -501,9 +637,95 @@
     });
   }
 
+  document.addEventListener(
+    'click',
+    function (ev) {
+      if (ev.target.closest('.review-reaction-picker-wrap')) return;
+      closeAllReactionPickers();
+    },
+    true
+  );
+
   var browseList = document.getElementById('reviews-browse-list');
   if (browseList) {
     browseList.addEventListener('click', function (ev) {
+      var openBtn = ev.target.closest('[data-review-reaction-open]');
+      if (openBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var wrap = openBtn.closest('.review-reaction-picker-wrap');
+        var picker = wrap && wrap.querySelector('.review-reaction-picker');
+        if (!picker) return;
+        var wasHidden = picker.hidden;
+        closeAllReactionPickers();
+        picker.hidden = !wasHidden;
+        openBtn.setAttribute('aria-expanded', wasHidden ? 'true' : 'false');
+        return;
+      }
+
+      var pickEm = ev.target.closest('.review-reaction-picker-btn');
+      if (pickEm) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var ridPick = parseInt(pickEm.getAttribute('data-review-reaction-pick'), 10);
+        var emPick = pickEm.getAttribute('data-emoji');
+        if (!ridPick || !emPick) return;
+        var basePick = apiBase();
+        if (!basePick) return;
+        var rowPick = pickEm.closest('.review-reaction-row');
+        var mineSet = {};
+        (rowPick ? rowPick.querySelectorAll('.review-reaction-chip.is-mine') : []).forEach(function (c) {
+          var e = c.getAttribute('data-emoji');
+          if (e) mineSet[e] = true;
+        });
+        var method = mineSet[emPick] ? 'DELETE' : 'POST';
+        fetch(basePick + '/api/reviews/' + ridPick + '/reactions', {
+          method: method,
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emoji: emPick }),
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { ok: res.ok, data: data };
+            });
+          })
+          .then(function (_ref) {
+            if (!_ref.ok || !_ref.data || !_ref.data.ok) return;
+            closeAllReactionPickers();
+            replaceReactionRow(ridPick, _ref.data);
+          });
+        return;
+      }
+
+      var chip = ev.target.closest('.review-reaction-chip');
+      if (chip && authUserId != null) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var ridC = parseInt(chip.getAttribute('data-review-reaction'), 10);
+        var emC = chip.getAttribute('data-emoji');
+        if (!ridC || !emC) return;
+        var baseC = apiBase();
+        if (!baseC) return;
+        var isMine = chip.classList.contains('is-mine');
+        fetch(baseC + '/api/reviews/' + ridC + '/reactions', {
+          method: isMine ? 'DELETE' : 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emoji: emC }),
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { ok: res.ok, data: data };
+            });
+          })
+          .then(function (_ref) {
+            if (!_ref.ok || !_ref.data || !_ref.data.ok) return;
+            replaceReactionRow(ridC, _ref.data);
+          });
+        return;
+      }
+
       var btn = ev.target.closest('.review-like-btn');
       if (!btn) return;
       ev.preventDefault();
@@ -530,8 +752,8 @@
           var d = _ref.data;
           var cnt = typeof d.like_count === 'number' ? d.like_count : 0;
           var nowLiked = !!d.liked_by_me;
-          var row = btn.closest('.review-like-row');
-          var numEl = row ? row.querySelector('.review-like-num') : null;
+          var slot = btn.closest('.review-like-slot');
+          var numEl = slot ? slot.querySelector('.review-like-num') : null;
           if (numEl) numEl.textContent = String(cnt);
           btn.classList.toggle('is-liked', nowLiked);
           btn.setAttribute('aria-pressed', nowLiked ? 'true' : 'false');

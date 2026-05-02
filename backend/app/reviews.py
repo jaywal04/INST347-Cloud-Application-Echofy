@@ -10,10 +10,29 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
 from app.database import db
-from app.models import ReviewLike, SongReview, User, utcnow_naive
+from app.models import ReviewLike, ReviewReaction, SongReview, User, utcnow_naive
 
 
 reviews_bp = Blueprint("reviews", __name__, url_prefix="/api/reviews")
+
+# Allowlisted Discord-style reactions (exact grapheme strings; validated on POST).
+ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED: tuple[str, ...] = (
+    "🩷",
+    "💯",
+    "🫡",
+    "❤️‍🔥",
+    "👍🏼",
+    "👎🏼",
+    "💩",
+    "🎵",
+    "🎶",
+    "😂",
+    "😍",
+    "😡",
+    "💀",
+    "☠️",
+)
+ALLOWED_REVIEW_REACTION_EMOJIS = frozenset(ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED)
 
 
 def _clean_string(value, max_len: int, default: str = "") -> str:
@@ -90,6 +109,87 @@ def _apply_like_fields(d: dict, rid: int, meta: dict[int, dict]) -> None:
     d["liked_by_me"] = m["liked_by_me"]
 
 
+def _reaction_meta_for_reviews(review_ids: list[int], viewer_id: int | None) -> dict[int, dict]:
+    if not review_ids:
+        return {}
+    counts_rows = (
+        db.session.query(
+            ReviewReaction.song_review_id,
+            ReviewReaction.emoji,
+            func.count(ReviewReaction.id),
+            func.min(ReviewReaction.created_at).label("first_at"),
+        )
+        .filter(ReviewReaction.song_review_id.in_(review_ids))
+        .group_by(ReviewReaction.song_review_id, ReviewReaction.emoji)
+        .all()
+    )
+    buckets: dict[int, list[tuple[str, int, object]]] = {}
+    for sid, em, n, first_at in counts_rows:
+        buckets.setdefault(int(sid), []).append((em, int(n), first_at))
+    counts_by_review: dict[int, dict[str, int]] = {}
+    for rid in review_ids:
+        rid = int(rid)
+        items = list(buckets.get(rid, []))
+        items.sort(key=lambda t: (t[2], t[0]))
+        counts_by_review[rid] = {em: cnt for em, cnt, _ in items}
+
+    mine_by_review: dict[int, list[str]] = {int(rid): [] for rid in review_ids}
+    if viewer_id is not None:
+        mrows = (
+            db.session.query(ReviewReaction.song_review_id, ReviewReaction.emoji)
+            .filter(
+                ReviewReaction.song_review_id.in_(review_ids),
+                ReviewReaction.user_id == viewer_id,
+            )
+            .all()
+        )
+        for sid, em in mrows:
+            mine_by_review[int(sid)].append(em)
+    for rid in mine_by_review:
+        mine_by_review[rid] = sorted(set(mine_by_review[rid]))
+
+    out: dict[int, dict] = {}
+    for rid in review_ids:
+        rid = int(rid)
+        out[rid] = {
+            "reaction_counts": dict(counts_by_review.get(rid, {})),
+            "my_reactions": list(mine_by_review.get(rid, [])),
+        }
+    return out
+
+
+def _apply_reaction_fields(d: dict, rid: int, meta: dict[int, dict]) -> None:
+    m = meta.get(int(rid), {"reaction_counts": {}, "my_reactions": []})
+    d["reaction_counts"] = m["reaction_counts"]
+    d["my_reactions"] = m["my_reactions"]
+
+
+def _reaction_snapshot(review_id: int, viewer_id: int | None) -> dict:
+    rows = (
+        db.session.query(
+            ReviewReaction.emoji,
+            func.count(ReviewReaction.id),
+            func.min(ReviewReaction.created_at).label("first_at"),
+        )
+        .filter(ReviewReaction.song_review_id == review_id)
+        .group_by(ReviewReaction.emoji)
+        .all()
+    )
+    ordered = sorted(rows, key=lambda r: (r[2], r[0]))
+    counts = {em: int(n) for em, n, fa in ordered}
+    mine: list[str] = []
+    if viewer_id is not None:
+        mine = sorted(
+            {
+                r[0]
+                for r in db.session.query(ReviewReaction.emoji).filter_by(
+                    song_review_id=review_id, user_id=viewer_id
+                )
+            }
+        )
+    return {"reaction_counts": counts, "my_reactions": mine}
+
+
 def _browse_search_pattern(raw: str) -> str | None:
     """Substring match for name / artists / album / text; strip LIKE metacharacters."""
     s = (raw or "").strip()[:120]
@@ -99,6 +199,12 @@ def _browse_search_pattern(raw: str) -> str | None:
     if not s:
         return None
     return f"%{s}%"
+
+
+@reviews_bp.get("/reactions/allowed")
+def allowed_review_reactions():
+    """Public: fixed allowlist of emoji strings the client may offer for review reactions."""
+    return jsonify(ok=True, emojis=list(ALLOWED_REVIEW_REACTION_EMOJIS_ORDERED))
 
 
 @reviews_bp.get("/recent")
@@ -113,11 +219,13 @@ def recent_reviews():
     ids = [r[0].id for r in rows]
     viewer_id = current_user.id if current_user.is_authenticated else None
     meta = _like_meta_for_reviews(ids, viewer_id)
+    rmeta = _reaction_meta_for_reviews(ids, viewer_id)
     result = []
     for review, user in rows:
         d = review.to_dict()
         d["username"] = user.username
         _apply_like_fields(d, review.id, meta)
+        _apply_reaction_fields(d, review.id, rmeta)
         result.append(d)
     return jsonify(ok=True, reviews=result)
 
@@ -190,11 +298,13 @@ def browse_reviews():
     ids = [r[0].id for r in rows]
     viewer_id = current_user.id if current_user.is_authenticated else None
     meta = _like_meta_for_reviews(ids, viewer_id)
+    rmeta = _reaction_meta_for_reviews(ids, viewer_id)
     result = []
     for review, user in rows:
         d = review.to_dict()
         d["username"] = user.username
         _apply_like_fields(d, review.id, meta)
+        _apply_reaction_fields(d, review.id, rmeta)
         result.append(d)
     return jsonify(ok=True, reviews=result)
 
@@ -246,11 +356,13 @@ def reviews_for_item():
     ids = [r[0].id for r in rows]
     viewer_id = current_user.id if current_user.is_authenticated else None
     meta = _like_meta_for_reviews(ids, viewer_id)
+    rmeta = _reaction_meta_for_reviews(ids, viewer_id)
     result = []
     for review, user in rows:
         d = review.to_dict()
         d["username"] = user.username
         _apply_like_fields(d, review.id, meta)
+        _apply_reaction_fields(d, review.id, rmeta)
         result.append(d)
 
     artists = item.get("artists") or []
@@ -311,6 +423,60 @@ def unlike_review(review_id: int):
         .scalar()
     )
     return jsonify(ok=True, like_count=int(cnt or 0), liked_by_me=False)
+
+
+def _parse_reaction_emoji() -> str | None:
+    data = request.get_json(silent=True) or {}
+    raw = data.get("emoji")
+    if raw is None or not isinstance(raw, str):
+        return None
+    emoji = raw.strip()
+    if not emoji or len(emoji) > 32:
+        return None
+    return emoji if emoji in ALLOWED_REVIEW_REACTION_EMOJIS else None
+
+
+@reviews_bp.post("/<int:review_id>/reactions")
+@login_required
+def add_review_reaction(review_id: int):
+    emoji = _parse_reaction_emoji()
+    if emoji is None:
+        return jsonify(ok=False, errors=["Invalid or missing emoji."]), 400
+    review = db.session.get(SongReview, review_id)
+    if review is None:
+        return jsonify(ok=False, errors=["Review not found."]), 404
+    existing = ReviewReaction.query.filter_by(
+        user_id=current_user.id, song_review_id=review_id, emoji=emoji
+    ).first()
+    if existing is None:
+        db.session.add(
+            ReviewReaction(
+                user_id=current_user.id, song_review_id=review_id, emoji=emoji
+            )
+        )
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+    snap = _reaction_snapshot(review_id, current_user.id)
+    return jsonify(ok=True, **snap)
+
+
+@reviews_bp.delete("/<int:review_id>/reactions")
+@login_required
+def remove_review_reaction(review_id: int):
+    emoji = _parse_reaction_emoji()
+    if emoji is None:
+        return jsonify(ok=False, errors=["Invalid or missing emoji."]), 400
+    review = db.session.get(SongReview, review_id)
+    if review is None:
+        return jsonify(ok=False, errors=["Review not found."]), 404
+    ReviewReaction.query.filter_by(
+        user_id=current_user.id, song_review_id=review_id, emoji=emoji
+    ).delete()
+    db.session.commit()
+    snap = _reaction_snapshot(review_id, current_user.id)
+    return jsonify(ok=True, **snap)
 
 
 @reviews_bp.get("")

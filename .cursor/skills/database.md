@@ -41,6 +41,7 @@ Priority:
 | `friend_requests` | Directed requests (`from_user_id`, `to_user_id`, `status`); unique on (from, to); FK `NO ACTION` to satisfy SQL Server cascade rules |
 | `song_reviews` | Per-user ratings/reviews keyed by `item_hash` (SHA-256 of canonical item key); unique (user_id, item_hash) |
 | `review_likes` | `ReviewLike` — likes on reviews; **unique** `(user_id, song_review_id)`; `song_review_id` **ON DELETE CASCADE** (deleting a review removes its likes); `user_id` **ON DELETE NO ACTION** so SQL Server avoids error 1785 (multiple cascade paths from `users`). Account deletion removes the user’s like rows in app code before deleting `users`. |
+| `review_reactions` | `ReviewReaction` — allowlisted emoji per review; **unique** `(user_id, song_review_id, emoji)`; same FK pattern as likes (`user_id` NO ACTION, `song_review_id` CASCADE); emoji values validated in `reviews.py` |
 
 ## Time storage
 

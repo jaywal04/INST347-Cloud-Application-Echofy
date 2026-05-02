@@ -37,6 +37,14 @@ Open or curl: `http://127.0.0.1:5001/api/health` → JSON `{"status":"ok"}`.
 
 Copy `.env.example` → `.env` at **repo root** (backend loads it from there). The static site does **not** read `.env`; it calls the API via `js/apiBase.js` / `echofy-config.json`.
 
+### Database URI (SQLite vs Azure SQL)
+
+`backend/app/database.py` picks the DB in this order: **`AZURE_SQL_CONNECTION_STRING`** → **`DATABASE_URL`** → SQLite under `backend/instance/echofy.db`.
+
+- **`AZURE_STORAGE_CONNECTION_STRING`** is only for blob storage; it does **not** switch the SQL database.
+- If you set Azure SQL in `.env` but the app still uses SQLite, check **Windows User or System environment variables** for an empty or old `AZURE_SQL_CONNECTION_STRING` / `DATABASE_URL`. The backend loads `.env` with **`override=True`**, so repo-root `.env` should win after a restart; if it still misbehaves, remove those keys from Windows env or sign out/in.
+- Put the full ODBC string on **one line** in `.env`, or wrap it in **double quotes** if your editor wraps lines.
+
 ## Spotify OAuth locally
 
 Dashboard redirect URI should match **`http://127.0.0.1:5001/callback`** (Spotify often rejects `localhost` for the callback). Frontend can still be `http://localhost:3001` — see `spotify_api.md` / `security.md`.

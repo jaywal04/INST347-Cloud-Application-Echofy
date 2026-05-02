@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
 from app.database import db
-from app.models import SongReview, utcnow_naive
+from app.models import SongReview, User, utcnow_naive
 
 
 reviews_bp = Blueprint("reviews", __name__, url_prefix="/api/reviews")
@@ -37,6 +37,23 @@ def _item_key(item: dict) -> str:
 
 def _hash_key(item_key: str) -> str:
     return hashlib.sha256(item_key.encode("utf-8")).hexdigest()
+
+
+@reviews_bp.get("/recent")
+def recent_reviews():
+    rows = (
+        db.session.query(SongReview, User)
+        .join(User, SongReview.user_id == User.id)
+        .order_by(SongReview.updated_at.desc())
+        .limit(10)
+        .all()
+    )
+    result = []
+    for review, user in rows:
+        d = review.to_dict()
+        d["username"] = user.username
+        result.append(d)
+    return jsonify(ok=True, reviews=result)
 
 
 @reviews_bp.get("")

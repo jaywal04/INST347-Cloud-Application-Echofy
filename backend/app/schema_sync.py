@@ -346,6 +346,24 @@ def ensure_review_reactions_one_per_user_emoji(engine) -> None:
         conn.execute(idx)
 
 
+def _clean_mysql_corrupted_reactions(engine) -> None:
+    """Delete reaction rows whose emoji was corrupted to '?' by MySQL's 3-byte utf8 charset.
+
+    Any emoji that was stored while the column used utf8 (not utf8mb4) became a sequence of
+    ASCII '?' characters.  Real emoji are always non-ASCII, so deleting rows where emoji
+    consists entirely of ASCII characters removes exactly the corrupted rows.
+    """
+    if engine.dialect.name != "mysql":
+        return
+    table_name = ReviewReaction.__tablename__
+    insp = inspect(engine)
+    if not insp.has_table(table_name):
+        return
+    q = _quote_table_mysql(table_name)
+    with engine.begin() as conn:
+        conn.execute(text(f"DELETE FROM {q} WHERE `emoji` REGEXP '^[[:ascii:]]+$'"))
+
+
 def _ensure_mysql_emoji_utf8mb4(engine) -> None:
     """ALTER the emoji column to utf8mb4 on MySQL if it isn't already.
 
@@ -388,3 +406,4 @@ def ensure_model_table_columns(engine) -> None:
     ensure_review_likes_one_per_user(engine)
     ensure_review_reactions_one_per_user_emoji(engine)
     _ensure_mysql_emoji_utf8mb4(engine)
+    _clean_mysql_corrupted_reactions(engine)

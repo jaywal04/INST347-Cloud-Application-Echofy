@@ -13,8 +13,19 @@ from app.envutil import first_non_empty
 
 SPOTIFY_API = "https://api.spotify.com/v1"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
-# Official Spotify chart playlist (Top 50 — Global); public, works with client credentials.
+# Official Spotify chart playlists (editorial); public with client credentials.
 GLOBAL_TOP_50_PLAYLIST = "37i9dQZEVXbMDoHDwVN2tF"
+USA_TOP_50_PLAYLIST = "37i9dQZEVXbLRQDuF5jeBp"
+VIRAL_50_GLOBAL_PLAYLIST = "37i9dQZEVXbLiRSasKsNU9"
+VIRAL_50_USA_PLAYLIST = "37i9dQZEVXbKuaTI1Z1Afx"
+
+# Keys match GET /api/spotify/top-tracks?view=<key> (hyphens normalized to underscores).
+CHART_PLAYLIST_VIEWS: dict[str, tuple[str, str]] = {
+    "global": (GLOBAL_TOP_50_PLAYLIST, "global_top_50"),
+    "usa": (USA_TOP_50_PLAYLIST, "usa_top_50"),
+    "viral_global": (VIRAL_50_GLOBAL_PLAYLIST, "viral_50_global"),
+    "viral_usa": (VIRAL_50_USA_PLAYLIST, "viral_50_usa"),
+}
 
 _REFRESH_MARGIN_SEC = 60
 _REQUEST_TIMEOUT = 20
@@ -552,6 +563,145 @@ def _search_tracks_client_fallback(
     return None, tail
 
 
+def _playlist_tracks_market_fallback(
+    access_token: str, playlist_id: str
+) -> tuple[list[dict[str, Any]] | None, str]:
+    """Try playlist tracks with account market, then without market (chart + client creds)."""
+    last_detail = ""
+    market = _spotify_iso_market()
+    market_attempts: list[str | None] = []
+    if market:
+        market_attempts.append(market)
+    market_attempts.append(None)
+    for m in market_attempts:
+        tracks, err = _playlist_tracks_payload(access_token, playlist_id, market=m)
+        if tracks:
+            return tracks, ""
+        if err:
+            last_detail = err
+    return None, last_detail
+
+
+def _new_releases_tracks(access_token: str) -> tuple[list[dict[str, Any]] | None, str]:
+    nr = requests.get(
+        f"{SPOTIFY_API}/browse/new-releases",
+        headers=_headers(access_token),
+        params={"limit": 20},
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if nr.status_code != 200:
+        try:
+            detail = nr.json().get("error", {}).get("message", "") or nr.text[:200]
+        except Exception:
+            detail = nr.text[:200]
+        return None, detail or f"HTTP {nr.status_code}"
+    tracks: list[dict[str, Any]] = []
+    for album in nr.json().get("albums", {}).get("items") or []:
+        row = _normalize_new_release_album(album)
+        if row:
+            tracks.append(row)
+    if tracks:
+        return tracks, ""
+    return None, "new releases response had no albums"
+
+
+def fetch_curated_chart_for_response(
+    chart_view: str,
+    client_id: str = "",
+    client_secret: str = "",
+    legacy_user_token: str = "",
+    oauth_access_token: str = "",
+    _oauth_refresh_token: str = "",
+    _on_token_refresh: Callable[[str, str | None], None] | None = None,
+) -> tuple[dict[str, Any], int]:
+    """Load a specific editorial chart or new releases (not the /me/top/tracks personalized path)."""
+    key = (chart_view or "").strip().lower().replace("-", "_")
+    cid, csec = client_id.strip(), client_secret.strip()
+
+    def _token_for_charts() -> tuple[str | None, tuple[dict[str, Any], int] | None]:
+        if cid and csec:
+            tok, err = _get_client_credentials_token(cid, csec)
+            if tok:
+                return tok, None
+            return None, (
+                {"error": "token_error", "message": err or "Could not obtain Spotify access token."},
+                502,
+            )
+        user = (oauth_access_token or legacy_user_token or "").strip()
+        if not user:
+            return None, (
+                {
+                    "error": "missing_credentials",
+                    "message": (
+                        "Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET for chart playlists, "
+                        "or connect Spotify / set SPOTIFY_TOKEN."
+                    ),
+                },
+                503,
+            )
+        return user, None
+
+    token, err_tup = _token_for_charts()
+    if err_tup:
+        return err_tup
+    assert token
+
+    if key == "new_releases":
+        tracks, detail = _new_releases_tracks(token)
+        if tracks:
+            return (
+                {
+                    "source": "new_releases",
+                    "tracks": tracks,
+                    "chart_view": key,
+                    "spotify_session_note": "Spotify new releases in your browse market.",
+                },
+                200,
+            )
+        return (
+            {
+                "error": "spotify_api_error",
+                "message": "Could not load new releases from Spotify.",
+                "detail": detail,
+            },
+            502,
+        )
+
+    pl = CHART_PLAYLIST_VIEWS.get(key)
+    if not pl:
+        allowed = ", ".join(sorted(set(CHART_PLAYLIST_VIEWS) | {"new_releases"}))
+        return (
+            {
+                "error": "invalid_view",
+                "message": f"Unknown chart view. Allowed: auto (omit), {allowed}.",
+            },
+            400,
+        )
+
+    pid, src_key = pl
+    tracks, last_err = _playlist_tracks_market_fallback(token, pid)
+    if tracks:
+        notes = {
+            "global_top_50": "Spotify’s Global Top 50 (daily chart).",
+            "usa_top_50": "Spotify’s Top 50 — USA.",
+            "viral_50_global": "Spotify’s Viral 50 — Global.",
+            "viral_50_usa": "Spotify’s Viral 50 — USA.",
+        }
+        return (
+            {
+                "source": src_key,
+                "tracks": tracks,
+                "chart_view": key,
+                "spotify_session_note": notes.get(src_key, ""),
+            },
+            200,
+        )
+    msg = "Could not load that playlist from Spotify."
+    if last_err:
+        msg = f"{msg} ({last_err})"
+    return ({"error": "spotify_api_error", "message": msg, "detail": last_err}, 502)
+
+
 def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
     """
     Chart-style content for Client Credentials (and user-token fallback).
@@ -560,41 +710,17 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
     """
     last_detail = ""
 
-    market = _spotify_iso_market()
+    tracks, err = _playlist_tracks_market_fallback(access_token, GLOBAL_TOP_50_PLAYLIST)
+    if tracks:
+        return ({"source": "global_top_50", "tracks": tracks}, 200)
+    if err:
+        last_detail = err
 
-    market_attempts: list[str | None] = []
-    if market:
-        market_attempts.append(market)
-    market_attempts.append(None)
-
-    for m in market_attempts:
-        tracks, err = _playlist_tracks_payload(
-            access_token, GLOBAL_TOP_50_PLAYLIST, market=m
-        )
-        if tracks:
-            return ({"source": "global_top_50", "tracks": tracks}, 200)
-        if err:
-            last_detail = err
-
-    nr = requests.get(
-        f"{SPOTIFY_API}/browse/new-releases",
-        headers=_headers(access_token),
-        params={"limit": 20},
-        timeout=_REQUEST_TIMEOUT,
-    )
-    if nr.status_code == 200:
-        tracks = []
-        for album in nr.json().get("albums", {}).get("items") or []:
-            row = _normalize_new_release_album(album)
-            if row:
-                tracks.append(row)
-        if tracks:
-            return ({"source": "new_releases", "tracks": tracks}, 200)
-    else:
-        try:
-            last_detail = nr.json().get("error", {}).get("message", "") or nr.text[:200]
-        except Exception:
-            last_detail = nr.text[:200]
+    nr_tracks, nr_detail = _new_releases_tracks(access_token)
+    if nr_tracks:
+        return ({"source": "new_releases", "tracks": nr_tracks}, 200)
+    if nr_detail:
+        last_detail = nr_detail
 
     feat = requests.get(
         f"{SPOTIFY_API}/browse/featured-playlists",
@@ -626,7 +752,7 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
         except Exception:
             last_detail = feat.text[:200]
 
-    st_tracks, st_err = _search_tracks_client_fallback(access_token, market)
+    st_tracks, st_err = _search_tracks_client_fallback(access_token, "")
     if st_tracks:
         return ({"source": "search_explore", "tracks": st_tracks}, 200)
     if st_err:

@@ -538,6 +538,21 @@ def list_reviews():
     return jsonify(ok=True, reviews=[review.to_dict() for review in reviews])
 
 
+@reviews_bp.delete("/<int:review_id>")
+@login_required
+def delete_review(review_id: int):
+    review = db.session.get(SongReview, review_id)
+    if review is None:
+        return jsonify(ok=False, errors=["Review not found."]), 404
+    if review.user_id != current_user.id:
+        return jsonify(ok=False, errors=["You can only delete your own reviews."]), 403
+    # review_id FK on notifications is NO ACTION on MSSQL — clear first
+    Notification.query.filter_by(review_id=review_id).delete(synchronize_session=False)
+    db.session.delete(review)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @reviews_bp.post("")
 @login_required
 def upsert_review():

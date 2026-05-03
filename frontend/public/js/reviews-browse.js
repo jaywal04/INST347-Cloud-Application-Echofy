@@ -169,9 +169,23 @@
   function closeAllReactionPickers() {
     document.querySelectorAll('.review-reaction-picker').forEach(function (p) {
       p.hidden = true;
+      p.classList.remove('review-reaction-picker--flip-up');
     });
     document.querySelectorAll('.review-reaction-add').forEach(function (b) {
       b.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function positionReactionPicker(picker) {
+    picker.classList.remove('review-reaction-picker--flip-up');
+    if (picker.hidden) return;
+    requestAnimationFrame(function () {
+      if (picker.hidden) return;
+      var rect = picker.getBoundingClientRect();
+      var margin = 12;
+      if (rect.bottom > window.innerHeight - margin) {
+        picker.classList.add('review-reaction-picker--flip-up');
+      }
     });
   }
 
@@ -668,6 +682,9 @@
         closeAllReactionPickers();
         picker.hidden = !wasHidden;
         openBtn.setAttribute('aria-expanded', wasHidden ? 'true' : 'false');
+        if (!picker.hidden) {
+          positionReactionPicker(picker);
+        }
         return;
       }
 

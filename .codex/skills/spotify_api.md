@@ -22,7 +22,7 @@ Resolution logic lives in `spotify_client._resolve_spotify_token` and helpers.
 ## Web API usage (`spotify_client.py`)
 
 - Base: `https://api.spotify.com/v1`
-- Implements playlist fetch, top tracks, user playlists, search, genre-based recommendations, “recommend like this item”, and chart fallbacks (e.g. Global Top 50 playlist id `37i9dQZEVXbMDoHDwVN2tF`).
+- Implements playlist fetch, top tracks, user playlists, search, genre-based recommendations, “recommend like this item”, and chart fallbacks (e.g. Global Top 50 playlist id `37i9dQZEVXbMDoHDwVN2tF`). **`GET /api/spotify/top-tracks?view=…`** loads a specific editorial chart (USA Top 50, Viral 50 global/USA, new releases) via `fetch_curated_chart_for_response` in `spotify_client.py`.
 - **Search:** Spotify’s API caps `limit` at 10 for `/search`; code uses `_SPOTIFY_SEARCH_MAX_LIMIT = 10`. If a **user** token is used first but Spotify returns **401** (expired), search **retries once** with **client credentials** when ID/secret are set, and may include `spotify_session_note` in the JSON payload.
 - Token refresh: refresh token exchanged when access token expires; callback `on_token_refresh` persists new access (and refresh if rotated) to DB or session.
 

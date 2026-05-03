@@ -7,18 +7,16 @@
 Priority:
 
 1. **`AZURE_SQL_CONNECTION_STRING`** — Full ODBC string; SQLAlchemy URI becomes `mssql+pyodbc:///?odbc_connect=...` (URL-encoded). Driver-level retry params may be injected for paused DB wake-up.
-2. **`DATABASE_URL`** — Any SQLAlchemy URI. **For MySQL**, `charset=utf8mb4` is automatically injected into the URL if not already present (required for emoji storage — plain `utf8` silently corrupts 4-byte characters to `?`).
+2. **`DATABASE_URL`** — Optional override when not using Azure SQL (any SQLAlchemy URI the app is configured to use).
 3. **SQLite fallback** — File at `backend/instance/echofy.db` (directory created if missing).
-
-`pymysql` is required in `requirements.txt` for MySQL connections (`mysql+pymysql://...`).
 
 ## Engine options (remote only)
 
-`apply_remote_db_engine_options` skips SQLite, then sets pool defaults: `pool_pre_ping`, `pool_recycle`, `pool_timeout`, `pool_size`, `max_overflow`, `connect_args`. MySQL uses `connect_timeout`; MSSQL/others use `timeout`.
+`apply_remote_db_engine_options` skips SQLite, then sets pool defaults: `pool_pre_ping`, `pool_recycle`, `pool_timeout`, `pool_size`, `max_overflow`, `connect_args`. PostgreSQL-family drivers use `connect_timeout`; ODBC/Azure SQL uses `timeout`.
 
 ## Startup / schema
 
-- `init_db(app)` registers SQLAlchemy, `db.create_all()`, then `schema_sync.ensure_model_table_columns` to add missing columns on existing tables across SQLite, MSSQL, and MySQL.
+- `init_db(app)` registers SQLAlchemy, `db.create_all()`, then `schema_sync.ensure_model_table_columns` to add missing columns on existing tables for **SQLite** and **Microsoft SQL Server / Azure SQL**.
 - If DB is unreachable at startup, warning is logged; routes handle `OperationalError` / `DBAPIError` with 503.
 
 ## Backward-compatible schema changes (deployed DBs)
@@ -29,7 +27,7 @@ Priority:
 
 - **New table:** add the SQLAlchemy model; `db.create_all()` creates it on next startup for DBs that did not have it. If you need extra indexes or constraints not created by `create_all()` on legacy stores, add logic in `backend/app/schema_sync.py` (see `ensure_review_likes_one_per_user` as a pattern).
 - **New column on an existing table:** add the column on the model, then ensure `ensure_model_table_columns` runs for that table (include `Model.__table__` in `ensure_model_table_columns` if it is a new table name). Prefer nullable columns or sensible defaults so existing rows need no manual backfill.
-- **New unique index / dedupe:** implement detection + optional dedupe + `CREATE UNIQUE INDEX` in `schema_sync` for SQLite, MSSQL, and MySQL as needed; never leave production with duplicate rows that would block the index.
+- **New unique index / dedupe:** implement detection + optional dedupe + `CREATE UNIQUE INDEX` in `schema_sync` for SQLite and MSSQL as needed; never leave production with duplicate rows that would block the index.
 - **Renames or destructive changes:** avoid unless unavoidable; if required, document a multi-step approach (add new column → backfill → switch reads → drop old) in this file.
 
 **AGENTS.md / CLAUDE.md** require this policy at a high level; this section is the operational checklist.

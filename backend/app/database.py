@@ -13,7 +13,7 @@ db = SQLAlchemy()
 
 
 def apply_remote_db_engine_options(app: Flask) -> None:
-    """Azure SQL/MySQL and similar hosts often close idle TCP connections; refresh pooled conns."""
+    """Tune the pool for remote databases (e.g. Azure SQL closing idle TCP connections)."""
     uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
     if not uri or uri.startswith("sqlite"):
         return
@@ -23,25 +23,12 @@ def apply_remote_db_engine_options(app: Flask) -> None:
     opts.setdefault("pool_timeout", 30)
     opts.setdefault("pool_size", 5)
     opts.setdefault("max_overflow", 2)
-    # MySQL uses connect_timeout; MSSQL/others use timeout
-    if uri.startswith("mysql"):
+    lowered = uri.lower()
+    if lowered.startswith("postgresql") or "+psycopg" in lowered or "+asyncpg" in lowered:
         opts.setdefault("connect_args", {"connect_timeout": 30})
     else:
         opts.setdefault("connect_args", {"timeout": 30})
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = opts
-
-
-def _inject_mysql_charset(uri: str) -> str:
-    """Ensure charset=utf8mb4 is present in a MySQL connection URI.
-
-    Without utf8mb4, MySQL silently truncates 4-byte emoji to '?'.
-    """
-    if not uri.lower().startswith("mysql"):
-        return uri
-    sep = "&" if "?" in uri else "?"
-    if "charset=" not in uri.lower():
-        uri = f"{uri}{sep}charset=utf8mb4"
-    return uri
 
 
 def _build_database_uri() -> str:
@@ -49,7 +36,7 @@ def _build_database_uri() -> str:
 
     Priority:
       1. AZURE_SQL_CONNECTION_STRING  – full ODBC string for Azure SQL
-      2. DATABASE_URL                 – any SQLAlchemy URI (Postgres, MySQL, etc.)
+      2. DATABASE_URL                 – optional override (e.g. another SQLAlchemy URI)
       3. Fall back to local SQLite file  (instance/echofy.db)
     """
     azure_conn = os.environ.get("AZURE_SQL_CONNECTION_STRING", "").strip()
@@ -64,7 +51,7 @@ def _build_database_uri() -> str:
 
     generic = os.environ.get("DATABASE_URL", "").strip()
     if generic:
-        return _inject_mysql_charset(generic)
+        return generic
 
     db_path = Path(__file__).resolve().parent.parent / "instance" / "echofy.db"
     db_path.parent.mkdir(exist_ok=True)

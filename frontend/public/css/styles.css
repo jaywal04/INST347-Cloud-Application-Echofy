@@ -407,7 +407,18 @@ section {
   background: var(--navy-border);
   border: 1px solid var(--navy-border);
   border-radius: 4px;
-  overflow: hidden;
+  /* visible so .review-reaction-picker (absolute, below +) is not clipped on the last row */
+  overflow: visible;
+}
+
+.reviews-list > .review-item:first-child {
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+}
+
+.reviews-list > .review-item:last-child {
+  border-bottom-left-radius: 3px;
+  border-bottom-right-radius: 3px;
 }
 
 .review-item {
@@ -645,6 +656,13 @@ section {
   gap: 0.25rem;
 }
 
+.review-reaction-picker.review-reaction-picker--flip-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+
 .review-reaction-picker-btn {
   margin: 0;
   padding: 0.2rem;
@@ -828,6 +846,36 @@ footer a:hover { color: var(--accent); }
   color: var(--text-muted);
   line-height: 1.55;
   margin: 0;
+}
+
+.discover-chart-view-row {
+  margin-bottom: 1rem;
+}
+
+.discover-chart-view-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.discover-chart-view-select {
+  width: 100%;
+  max-width: 22rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--navy-border);
+  background: var(--navy-deep);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.discover-chart-view-hint {
+  margin-top: 0.45rem;
+  margin-bottom: 0;
 }
 
 .discover-oauth-row {
@@ -1983,6 +2031,140 @@ footer a:hover { color: var(--accent); }
   max-width: 720px;
   margin: 0 auto;
   padding: 2rem 1rem 2rem;
+}
+
+/* My posts (review dashboard) */
+.posts-manage-page .posts-manage-status {
+  max-width: 720px;
+  margin: 0 auto 0.75rem;
+  padding: 0 1rem;
+}
+
+.posts-manage-page .posts-manage-status--error {
+  color: #f0a4a4;
+}
+
+.posts-manage-list {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.post-manage-card {
+  margin: 0;
+}
+
+.post-manage-card-head {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.post-manage-art {
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid var(--navy-border);
+}
+
+.post-manage-art--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  background: var(--navy-hover);
+  color: var(--text-dim);
+}
+
+.post-manage-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.post-manage-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.35;
+}
+
+.post-manage-sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.post-manage-fields {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.post-manage-fields .form-group {
+  margin: 0;
+}
+
+.post-manage-fields label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.posts-manage-rating {
+  max-width: 12rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--navy-border);
+  background: var(--navy-deep);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.posts-manage-textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--navy-border);
+  background: var(--navy-deep);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.post-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.post-manage-delete {
+  color: #e8a0a0;
+}
+
+.post-manage-delete:hover {
+  color: #ffb4b4;
+  border-color: rgba(255, 180, 180, 0.35);
+}
+
+.posts-manage-empty {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+}
+
+.posts-manage-empty a {
+  color: var(--accent);
 }
 
 .reviews-spotify-status {

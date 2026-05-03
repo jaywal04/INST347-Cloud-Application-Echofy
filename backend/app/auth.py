@@ -48,6 +48,7 @@ _RESERVED_USERNAMES = frozenset(
         "notifications",
         "user",
         "review",
+        "posts",
         "css",
         "js",
         "index",

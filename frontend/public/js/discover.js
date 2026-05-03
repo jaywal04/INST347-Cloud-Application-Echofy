@@ -47,6 +47,7 @@
   }
 
   var btn = document.getElementById('btn-spotify-top');
+  var chartViewSelect = document.getElementById('spotify-chart-view');
   var statusEl = document.getElementById('spotify-status');
   var resultsEl = document.getElementById('spotify-results');
   var connectLink = document.getElementById('spotify-connect-link');
@@ -370,7 +371,7 @@
   }
   if (oauthJustConnected && statusEl) {
     statusEl.textContent =
-      'Spotify connected. Use “Show top Spotify music” for your top tracks (or the chart if none).';
+      'Spotify connected. Charts load below automatically (your top tracks when available, otherwise the chart).';
   }
   if (oauthJustConnected && window.history && window.history.replaceState) {
     try {
@@ -563,11 +564,80 @@
     renderShortlist();
   }
 
+  var BTN_CHARTS_LABEL = 'Refresh charts';
+
   function setLoading(loading) {
     if (!btn) return;
     btn.disabled = loading;
-    btn.textContent = loading ? 'Loading...' : 'Show top Spotify music';
+    btn.textContent = loading ? 'Loading…' : BTN_CHARTS_LABEL;
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
+  }
+
+  function loadTopSpotifyMusic() {
+    if (!API_BASE) {
+      if (statusEl) {
+        statusEl.textContent =
+          'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
+      }
+      return;
+    }
+    if (!statusEl || !resultsEl) return;
+
+    setLoading(true);
+    statusEl.textContent = '';
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+
+    var topUrl = API_BASE + '/api/spotify/top-tracks';
+    if (chartViewSelect && chartViewSelect.value) {
+      topUrl += '?view=' + encodeURIComponent(chartViewSelect.value);
+    }
+
+    fetch(topUrl, fetchOpts)
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      })
+      .then(function (_ref) {
+        var ok = _ref.ok;
+        var data = _ref.data;
+
+        console.log('[Echofy] Spotify /api/spotify/top-tracks', {
+          httpStatus: _ref.status,
+          ok: ok,
+          payload: data,
+          trackCount: data && data.tracks ? data.tracks.length : 0,
+        });
+
+        if (!ok) {
+          statusEl.textContent = apiErrorText(
+            data,
+            'Could not load Spotify data. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env and restart the backend.'
+          );
+          return;
+        }
+
+        var tracks = data.tracks || [];
+        if (!tracks.length) {
+          statusEl.textContent = 'Spotify returned no tracks.';
+          return;
+        }
+
+        currentItems = tracks;
+        statusEl.textContent = data.spotify_session_note || '';
+        renderItems(resultsEl, sourceLabel(data.source, data), tracks);
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        refreshSaveButtons();
+      })
+      .catch(function (err) {
+        console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
+        reportDiscover('discover.top_tracks', err, { endpoint: '/api/spotify/top-tracks' });
+        statusEl.textContent = MSG_TRY_AGAIN;
+      })
+      .finally(function () {
+        setLoading(false);
+      });
   }
 
   function setSearchLoading(loading) {
@@ -583,6 +653,9 @@
   function sourceLabel(source, data) {
     if (source === 'your_top_tracks') return 'Your top tracks (Spotify)';
     if (source === 'global_top_50') return 'Global Top 50 (Spotify)';
+    if (source === 'usa_top_50') return 'Top 50 — USA (Spotify)';
+    if (source === 'viral_50_global') return 'Viral 50 — Global (Spotify)';
+    if (source === 'viral_50_usa') return 'Viral 50 — USA (Spotify)';
     if (source === 'new_releases') return 'New releases (Spotify)';
     if (source === 'spotify_search') return 'Search results (Spotify)';
     if (source === 'spotify_genre_search') return 'Genre seeds (Spotify)';
@@ -1056,62 +1129,16 @@
 
   if (btn && statusEl && resultsEl) {
     btn.addEventListener('click', function () {
-      if (!API_BASE) {
-        statusEl.textContent = 'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
-        return;
-      }
-
-      setLoading(true);
-      statusEl.textContent = '';
-      resultsEl.hidden = true;
-      resultsEl.innerHTML = '';
-
-      fetch(API_BASE + '/api/spotify/top-tracks', fetchOpts)
-        .then(function (res) {
-          return res.json().then(function (data) {
-            return { ok: res.ok, status: res.status, data: data };
-          });
-        })
-        .then(function (_ref) {
-          var ok = _ref.ok;
-          var data = _ref.data;
-
-          console.log('[Echofy] Spotify /api/spotify/top-tracks', {
-            httpStatus: _ref.status,
-            ok: ok,
-            payload: data,
-            trackCount: data && data.tracks ? data.tracks.length : 0,
-          });
-
-          if (!ok) {
-            statusEl.textContent = apiErrorText(
-              data,
-              'Could not load Spotify data. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env and restart the backend.'
-            );
-            return;
-          }
-
-          var tracks = data.tracks || [];
-          if (!tracks.length) {
-            statusEl.textContent = 'Spotify returned no tracks.';
-            return;
-          }
-
-          currentItems = tracks;
-          statusEl.textContent = data.spotify_session_note || '';
-          renderItems(resultsEl, sourceLabel(data.source, data), tracks);
-          btn.setAttribute('aria-expanded', 'true');
-          refreshSaveButtons();
-        })
-        .catch(function (err) {
-          console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
-          reportDiscover('discover.top_tracks', err, { endpoint: '/api/spotify/top-tracks' });
-          statusEl.textContent = MSG_TRY_AGAIN;
-        })
-        .finally(function () {
-          setLoading(false);
-        });
+      loadTopSpotifyMusic();
     });
+    if (chartViewSelect) {
+      chartViewSelect.addEventListener('change', function () {
+        loadTopSpotifyMusic();
+      });
+    }
+    if (API_BASE) {
+      loadTopSpotifyMusic();
+    }
   }
 
   searchTypeButtons.forEach(function (typeBtn) {
@@ -1197,7 +1224,8 @@
 
       var pool = currentItems.length ? currentItems : shortlist;
       if (!pool.length) {
-        surpriseStatusEl.textContent = 'Load top Spotify music, search Spotify, or search a genre first, then I can pick one.';
+        surpriseStatusEl.textContent =
+          'Load charts (above), search Spotify, or search a genre first, then I can pick one.';
         surpriseResultEl.hidden = true;
         return;
       }

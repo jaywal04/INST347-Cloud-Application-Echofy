@@ -113,7 +113,7 @@ To use **Azure SQL** in production, set `AZURE_SQL_CONNECTION_STRING` in `env`:
 AZURE_SQL_CONNECTION_STRING=Driver={ODBC Driver 18 for SQL Server};Server=tcp:yourserver.database.windows.net,1433;Database=echofy-relational-db;Uid=admin;Pwd=yourpassword;Encrypt=yes;TrustServerCertificate=no;
 ```
 
-The app switches automatically — no code changes needed. You can also set `DATABASE_URL` for any other SQLAlchemy-compatible database (PostgreSQL, MySQL, etc.).
+The app switches automatically — no code changes needed. You can optionally set `DATABASE_URL` to override the URI (advanced setups only; production is intended to use Azure SQL via the ODBC string above).
 
 **Schema updates:** On startup, after `create_all()`, the app compares the `users` table to the SQLAlchemy `User` model and runs `ALTER TABLE ... ADD` for any **missing** columns (for **SQLite** and **Microsoft SQL Server / Azure SQL** only). That way an older Azure `users` table gains fields such as `age`, `sex`, `bio`, `profile_image_url`, and privacy flags without a manual migration. Other databases are unchanged by this step.
 
@@ -130,7 +130,7 @@ The app switches automatically — no code changes needed. You can also set `DAT
 
 1. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), add a **Redirect URI** that matches **`SPOTIFY_REDIRECT_URI`** in your `.env` (default `http://127.0.0.1:5001/callback`). Spotify often rejects `localhost`; **`127.0.0.1`** is fine.
 2. Set **`SPOTIFY_CLIENT_ID`** and **`SPOTIFY_CLIENT_SECRET`** in repo-root `.env` (see [`.env.example`](.env.example)). Older **`JAY_SPOTIFY_*`** names are still read if the `SPOTIFY_*` variables are empty.
-3. **Connect Spotify** on the Discover page (or open `http://127.0.0.1:5001/auth/spotify`) to sign in; after callback, **your top tracks** are used when you click “Show top Spotify music,” with chart fallbacks when needed.
+3. **Connect Spotify** on the Discover page (or open `http://127.0.0.1:5001/auth/spotify`) to sign in; after callback, **your top tracks** load automatically on Discover (with chart fallbacks when needed). Use **Refresh charts** to reload.
 4. Without a connected session, **Client Credentials** loads chart-style data (Top 50 if allowed, else new releases / featured playlists) when ID and secret are set.
 5. For local OAuth, use the frontend at **`http://localhost:3001`** or **`http://127.0.0.1:3001`**; the static `js/apiBase.js` points API calls at **`http://127.0.0.1:5001`** or **`http://localhost:5001`** as appropriate.
 6. Optional **`SPOTIFY_TOKEN`**: same behavior as a connected user token without the browser flow (legacy **`JAY_SPOTIFY_TOKEN`** if `SPOTIFY_TOKEN` is empty).

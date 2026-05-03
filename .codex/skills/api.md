@@ -23,7 +23,7 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 | GET | `/api/spotify/playlists` | OAuth/session | User playlists (requires user token + refresh) |
 | GET | `/api/spotify/playlists/<playlist_id>/tracks` | OAuth/session | Tracks in a playlist |
 | POST | `/api/spotify/disconnect` | Session optional | Clears Spotify tokens (DB if logged in, else session) |
-| GET | `/api/spotify/top-tracks` | Optional user/OAuth | Top tracks or fallbacks (client credentials / chart) |
+| GET | `/api/spotify/top-tracks` | Optional user/OAuth | Default (no `view` or `view=auto`): personalized `/me/top/tracks` when connected, else public chart fallbacks. **Query `view`:** `global`, `usa`, `viral_global`, `viral_usa` (Spotify editorial playlists), or `new_releases` — forces that slice (prefers client credentials; user/legacy token fallback if ID/secret unset). |
 | GET | `/api/spotify/search` | Optional | Query params `q`, `type` (e.g. track) |
 | GET | `/api/spotify/recommend-by-genre` | Optional | Query param `genre` |
 | POST | `/api/spotify/recommend-like` | Optional | JSON body `item` for similarity recommendations |
@@ -88,6 +88,7 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 | DELETE | `/api/reviews/<int:review_id>/like` | Yes | Remove your like; returns `like_count`, `liked_by_me` |
 | GET | `/api/reviews` | Yes | Current user’s reviews (up to 200) |
 | POST | `/api/reviews` | Yes | Create or update review (JSON `item`, `rating`, optional `text`, `item_key`) |
+| DELETE | `/api/reviews/<int:review_id>` | Yes | Delete your own review (clears related notifications first for SQL Server FK rules) |
 
 ---
 

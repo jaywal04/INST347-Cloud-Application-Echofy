@@ -19,8 +19,9 @@ Do not hand-edit `public/*.html` for structural changes without updating snippet
 | `index.html` | index | `main.js`, `discover.js` |
 | `login.html` | login | `auth.js` |
 | `signup.html` | signup | `auth.js` |
-| `discover.html` | discover | `discover.js` |
+| `discover.html` | discover | `discover.js` — on load calls `GET /api/spotify/top-tracks` (optional `?view=` from **Chart source**); changing the menu or **Refresh charts** refetches |
 | `review.html` | review | `reviews-browse.js` — `GET /api/reviews/browse` (sort/category + optional text `q`); **Search Spotify** → `GET /api/spotify/search` then pick a track → `POST /api/reviews/for-item`; empty track reviews CTA links to `/discover` |
+| `posts.html` | posts | `posts.js` — logged-in **My posts**: `GET /api/reviews`, edit via `POST /api/reviews`, delete via `DELETE /api/reviews/<id>`; nav link **My posts** (`/{username}/posts` when prefixed) |
 | `friends.html` | friends | `friends.js` |
 | `profile.html` | profile | `profile.js` |
 | `notifications.html` | notifications | `notifications.js` |
@@ -39,7 +40,7 @@ All authenticated API calls should use `credentials: 'include'` so the Flask ses
 
 ## Username-prefixed paths (`js/pathContext.js`)
 
-URLs like `/{username}/discover`, `/{username}/friends`, etc. set:
+URLs like `/{username}/discover`, `/{username}/posts`, `/{username}/friends`, etc. set:
 
 - `window.ECHOFY_PATH_USERNAME`
 - `window.ECHOFY_USER_BASE`
@@ -49,7 +50,7 @@ The script fetches `/api/auth/me` and redirects to `/login` if unauthenticated, 
 
 ## Static Web Apps (`frontend/public/staticwebapp.config.json`)
 
-- Explicit rewrites map clean routes (`/login`, `/discover`, `/review`, …) to `*.html`.
+- Explicit rewrites map clean routes (`/login`, `/discover`, `/review`, `/posts`, …) to `*.html`.
 - **`navigationFallback`** rewrites unknown paths to `echofy-path-bridge.html` (excludes `/css/*`, `/js/*`, `/.auth/*`, `/echofy-config.json`) so client-side routing / username paths can load the shell.
 
 ## Styling and assets

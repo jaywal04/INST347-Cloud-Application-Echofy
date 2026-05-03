@@ -8,7 +8,21 @@
     <section class="discover-panel">
       <div class="discover-panel-head">
         <h2 class="section-title discover-panel-title">Spotify charts</h2>
-        <p class="discover-panel-desc">Load Spotify’s Global Top 50 chart, or connect your account to see your top tracks. Client ID, secret, and tokens stay on the server.</p>
+        <p class="discover-panel-desc">Charts load automatically when you open this page (your top tracks when Spotify is connected, otherwise Spotify’s public chart fallbacks). Pick a different chart source below or use Refresh charts to reload. Client ID, secret, and tokens stay on the server.</p>
+      </div>
+      <div class="discover-chart-view-row">
+        <label class="discover-chart-view-label" for="spotify-chart-view">Chart source</label>
+        <select id="spotify-chart-view" class="discover-chart-view-select" aria-describedby="spotify-chart-view-hint">
+          <option value="">Auto (my tops or smart fallback)</option>
+          <option value="global">Global Top 50</option>
+          <option value="usa">Top 50 — USA</option>
+          <option value="viral_global">Viral 50 — Global</option>
+          <option value="viral_usa">Viral 50 — USA</option>
+          <option value="new_releases">New releases</option>
+        </select>
+        <p id="spotify-chart-view-hint" class="discover-hint discover-chart-view-hint">
+          Changing the menu reloads the list. Editorial playlists need Client ID + Secret on the server (or a connected Spotify session as fallback).
+        </p>
       </div>
       <p class="discover-oauth-row">
         <a class="btn-ghost discover-connect-link" id="spotify-connect-link" href="#" hidden>Connect Spotify account</a>
@@ -16,7 +30,7 @@
         <button type="button" class="btn-ghost btn-sm" id="spotify-disconnect-btn" hidden>Disconnect Spotify</button>
       </p>
       <button type="button" class="btn-primary btn-spotify" id="btn-spotify-top" aria-expanded="false">
-        Show top Spotify music
+        Refresh charts
       </button>
       <p class="discover-hint" id="spotify-status" role="status"></p>
       <div class="spotify-results" id="spotify-results" hidden></div>

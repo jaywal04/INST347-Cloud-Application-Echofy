@@ -19,6 +19,7 @@ _USER_PAGE_HTML = {
     "dashboard": "discover.html",
     "discover": "discover.html",
     "review": "review.html",
+    "posts": "posts.html",
     "friends": "friends.html",
     "profile": "profile.html",
     "notifications": "notifications.html",

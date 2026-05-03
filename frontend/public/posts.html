@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <base href="/" />
+  <title>My posts — Echofy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+  <div id="navbar"></div>
+  <script src="js/apiBase.js"></script>
+  <script src="js/pathContext.js"></script>
+  <script src="js/navbar.js"></script>
+  <script src="js/bugReport.js"></script>
+
+  <main class="discover-page posts-manage-page">
+    <header class="discover-header">
+      <p class="hero-eyebrow discover-eyebrow">Your account</p>
+      <h1 class="discover-title">My posts</h1>
+      <p class="discover-lead">
+        Edit rating and text, save changes, or remove a review. Updates apply everywhere your review appears.
+      </p>
+    </header>
+
+    <p id="posts-status" class="discover-hint posts-manage-status" role="status" hidden></p>
+
+    <div id="posts-list" class="posts-manage-list" aria-live="polite"></div>
+
+    <p id="posts-empty" class="discover-hint posts-manage-empty" hidden>
+      You have not posted any reviews yet.
+      <a href="/discover" id="posts-cta-discover">Open Discover</a>
+      to rate a track.
+    </p>
+  </main>
+  <footer>
+    <span>© 2026 Echofy — INST347 Group 5</span>
+    <div class="footer-links">
+      <a href="/">Home</a>
+      <a href="#">Privacy</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/posts.js" defer></script>
+</body>
+</html>

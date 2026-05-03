@@ -66,6 +66,7 @@
           activeSeg === 'discover',
       },
       { href: base + '/review', text: 'Reviews', active: activeSeg === 'review' },
+      { href: base + '/posts', text: 'My posts', active: activeSeg === 'posts' },
       { href: base + '/friends', text: 'Friends', active: activeSeg === 'friends' },
       { href: '#', text: 'Your Echo', active: false },
     ]);
@@ -79,9 +80,11 @@
       (p0 === 'discover' || p0 === 'discovery' || p0 === 'dashboard');
     var activeFriends = pathParts.length === 1 && p0 === 'friends';
     var activeReview = pathParts.length === 1 && p0 === 'review';
+    var activePosts = pathParts.length === 1 && p0 === 'posts';
     appendNavLinks([
       { href: '/discover', text: 'Discover', active: activeDiscover },
       { href: '/review', text: 'Reviews', active: activeReview },
+      { href: '/posts', text: 'My posts', active: activePosts },
       { href: '#', text: 'Your Echo', active: false },
     ]);
   }

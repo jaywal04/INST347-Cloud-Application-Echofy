@@ -8,7 +8,7 @@
       var path = location.pathname;
       var search = location.search || '';
       var m = path.match(
-        /^\/([^/]+)\/(discovery|dashboard|discover|review|friends|profile|notifications|user)(?:\/|$)/
+        /^\/([^/]+)\/(discovery|dashboard|discover|review|posts|friends|profile|notifications|user)(?:\/|$)/
       );
       if (!m) {
         window.location.replace('/');
@@ -19,6 +19,7 @@
         dashboard: 'discover',
         discover: 'discover',
         review: 'review',
+        posts: 'posts',
         friends: 'friends',
         profile: 'profile',
         notifications: 'notifications',

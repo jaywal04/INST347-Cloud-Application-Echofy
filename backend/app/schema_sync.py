@@ -417,15 +417,15 @@ def _ensure_mssql_emoji_nvarchar(engine) -> None:
         return
     with engine.connect() as conn:
         row = conn.execute(text(
-            "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+            "SELECT DATA_TYPE, COLLATION_NAME FROM INFORMATION_SCHEMA.COLUMNS "
             "WHERE TABLE_NAME = :t AND COLUMN_NAME = 'emoji'"
         ), {"t": table_name}).fetchone()
-    if row and row[0].upper() == "NVARCHAR":
-        _log.info("schema_sync: emoji column is already NVARCHAR — no action needed")
+    if row and row[0].upper() == "NVARCHAR" and row[1] and "BIN2" in (row[1] or "").upper():
+        _log.info("schema_sync: emoji column is already NVARCHAR COLLATE Latin1_General_BIN2 — no action needed")
         return
 
-    current_type = row[0] if row else "UNKNOWN"
-    _log.info("schema_sync: emoji column is %s — starting NVARCHAR migration", current_type)
+    current_type = f"{row[0]} COLLATE {row[1]}" if row else "UNKNOWN"
+    _log.info("schema_sync: emoji column is %s — migrating to NVARCHAR + BIN2 collation", current_type)
 
     q = _quote_table_mssql(table_name)
     idx_name = "uq_review_reactions_user_review_emoji"
@@ -451,13 +451,14 @@ def _ensure_mssql_emoji_nvarchar(engine) -> None:
             f") DROP INDEX [{idx_name}] ON {q}"
         ))
 
-    # Step 2: alter the column type
-    _log.info("schema_sync: step 2 — ALTER COLUMN emoji NVARCHAR(32)")
+    # Step 2: alter the column type with BIN2 collation for exact emoji comparison
+    _log.info("schema_sync: step 2 — ALTER COLUMN emoji NVARCHAR(32) COLLATE Latin1_General_BIN2")
     with engine.begin() as conn:
         conn.execute(text(
-            f"ALTER TABLE {q} ALTER COLUMN [emoji] NVARCHAR(32) NOT NULL"
+            f"ALTER TABLE {q} ALTER COLUMN [emoji] "
+            f"NVARCHAR(32) COLLATE Latin1_General_BIN2 NOT NULL"
         ))
-    _log.info("schema_sync: step 2 complete — emoji column is now NVARCHAR(32)")
+    _log.info("schema_sync: step 2 complete — emoji column is now NVARCHAR(32) COLLATE Latin1_General_BIN2")
 
     # Step 3: recreate as unique index (idempotent)
     _log.info("schema_sync: step 3 — recreating unique index %s", idx_name)

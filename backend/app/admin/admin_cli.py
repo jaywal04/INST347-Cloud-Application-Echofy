@@ -298,19 +298,23 @@ def diagnose_emoji_column():
     # Column type
     with engine.connect() as conn:
         row = conn.execute(text(
-            "SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE "
+            "SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLLATION_NAME "
             "FROM INFORMATION_SCHEMA.COLUMNS "
             "WHERE TABLE_NAME = :t AND COLUMN_NAME = 'emoji'"
         ), {"t": table_name}).fetchone()
     if not row:
         print("  ERROR: Column 'emoji' not found.")
         return
-    dtype, maxlen, nullable = row
-    print(f"\n  Column: emoji  Type: {dtype}({maxlen})  Nullable: {nullable}")
-    if dtype.upper() == "NVARCHAR":
-        print("  -> NVARCHAR is correct. Emoji should store fine.")
+    dtype, maxlen, nullable, collation = row
+    print(f"\n  Column: emoji  Type: {dtype}({maxlen})  Nullable: {nullable}  Collation: {collation}")
+    if dtype.upper() != "NVARCHAR":
+        print("  -> NOT NVARCHAR — emoji stored as '??'. Needs ALTER COLUMN.")
+    elif not collation or "BIN2" not in (collation or "").upper():
+        print(f"  -> NVARCHAR but collation '{collation}' does NOT support supplementary characters.")
+        print(f"  -> All emoji compare as EQUAL in the unique index — only one emoji per review allowed!")
+        print(f"  -> Fix: ALTER to NVARCHAR(32) COLLATE Latin1_General_BIN2")
     else:
-        print("  -> NOT NVARCHAR — this is why emoji appear as '??'. Needs ALTER COLUMN.")
+        print("  -> NVARCHAR with BIN2 collation. Emoji should work correctly.")
 
     # Key constraints
     print(f"\n  Key constraints on {table_name}:")
@@ -372,20 +376,26 @@ def force_fix_emoji_column():
 
     print(f"\n  --- Force fix {table_name}.emoji ---")
 
-    # Check current type
+    # Check current type and collation
     with engine.connect() as conn:
         row = conn.execute(text(
-            "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+            "SELECT DATA_TYPE, COLLATION_NAME FROM INFORMATION_SCHEMA.COLUMNS "
             "WHERE TABLE_NAME = :t AND COLUMN_NAME = 'emoji'"
         ), {"t": table_name}).fetchone()
     if not row:
         print("  ERROR: Cannot find column 'emoji' in INFORMATION_SCHEMA.")
         return
-    print(f"  Current type: {row[0]}")
-    if row[0].upper() == "NVARCHAR":
-        print("  Column is already NVARCHAR. Running corrupted-row cleanup only...")
+    dtype, collation = row
+    print(f"  Current type: {dtype}  Collation: {collation}")
+    if dtype.upper() == "NVARCHAR" and collation and "BIN2" in (collation or "").upper():
+        print("  Column is already NVARCHAR + BIN2 collation. Running corrupted-row cleanup only...")
         _force_clean_corrupted(engine, q)
         return
+    if dtype.upper() == "NVARCHAR":
+        print(f"  Column is NVARCHAR but collation '{collation}' treats all emoji as equal.")
+        print(f"  Applying BIN2 collation fix...")
+    else:
+        print(f"  Column is {dtype} — converting to NVARCHAR + BIN2...")
 
     # Step 1a: drop as key constraint
     print(f"\n  Step 1a: Drop [{idx_name}] as key constraint...")
@@ -437,12 +447,15 @@ def force_fix_emoji_column():
     else:
         print(f"    No remaining indexes on emoji. Proceeding.")
 
-    # Step 2: ALTER COLUMN
-    print(f"\n  Step 2: ALTER COLUMN emoji → NVARCHAR(32)...")
+    # Step 2: ALTER COLUMN with BIN2 collation for exact emoji comparison
+    print(f"\n  Step 2: ALTER COLUMN emoji → NVARCHAR(32) COLLATE Latin1_General_BIN2...")
     try:
         with engine.begin() as conn:
-            conn.execute(text(f"ALTER TABLE {q} ALTER COLUMN [emoji] NVARCHAR(32) NOT NULL"))
-        print(f"    SUCCESS: Column is now NVARCHAR(32).")
+            conn.execute(text(
+                f"ALTER TABLE {q} ALTER COLUMN [emoji] "
+                f"NVARCHAR(32) COLLATE Latin1_General_BIN2 NOT NULL"
+            ))
+        print(f"    SUCCESS: Column is now NVARCHAR(32) COLLATE Latin1_General_BIN2.")
     except Exception as exc:
         print(f"    FAILED: {exc}")
         return

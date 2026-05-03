@@ -6,8 +6,12 @@ This startup sync fills in missing columns for legacy SQLite/Azure SQL tables.
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import Boolean, DateTime, Integer, String, inspect, text
 from sqlalchemy.schema import Column
+
+_log = logging.getLogger(__name__)
 
 from app.models import (
     FriendRequest,
@@ -396,10 +400,12 @@ def _ensure_mysql_emoji_utf8mb4(engine) -> None:
 def _ensure_mssql_emoji_nvarchar(engine) -> None:
     """ALTER the emoji column from VARCHAR to NVARCHAR on MSSQL if needed.
 
-    db.create_all() maps String(32) → VARCHAR(32) on SQL Server, which is
-    non-Unicode and silently corrupts 4-byte emoji to '?'.  NVARCHAR is required.
-    The unique index on (user_id, song_review_id, emoji) must be dropped first,
-    then recreated after the column type change.
+    db.create_all() with String(32) creates VARCHAR on SQL Server, which silently
+    corrupts 4-byte emoji to '?'.  Unicode(32) / NVARCHAR is required.
+
+    The unique CONSTRAINT (created by db.create_all) and standalone INDEX (created
+    by schema_sync) need separate DROP paths — SQL Server treats them differently.
+    Each DDL step runs in its own transaction so a partial failure is recoverable.
     """
     if engine.dialect.name != "mssql":
         return
@@ -414,20 +420,43 @@ def _ensure_mssql_emoji_nvarchar(engine) -> None:
         ), {"t": table_name}).fetchone()
     if row and row[0].upper() == "NVARCHAR":
         return
+
     q = _quote_table_mssql(table_name)
-    # Drop the unique index/constraint that covers the emoji column before altering
+    idx_name = "uq_review_reactions_user_review_emoji"
+
+    # Step 1a: drop as UNIQUE CONSTRAINT (created by db.create_all via UniqueConstraint)
     with engine.begin() as conn:
         conn.execute(text(
-            f"IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = "
-            f"'uq_review_reactions_user_review_emoji' AND object_id = OBJECT_ID(N'{table_name}')) "
-            f"DROP INDEX [uq_review_reactions_user_review_emoji] ON {q}"
+            f"IF EXISTS ("
+            f"  SELECT 1 FROM sys.key_constraints"
+            f"  WHERE name = '{idx_name}' AND parent_object_id = OBJECT_ID(N'{table_name}')"
+            f") ALTER TABLE {q} DROP CONSTRAINT [{idx_name}]"
         ))
+
+    # Step 1b: drop as standalone UNIQUE INDEX (created by schema_sync on legacy DBs)
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"IF EXISTS ("
+            f"  SELECT 1 FROM sys.indexes"
+            f"  WHERE name = '{idx_name}' AND object_id = OBJECT_ID(N'{table_name}')"
+            f"    AND is_unique_constraint = 0"
+            f") DROP INDEX [{idx_name}] ON {q}"
+        ))
+
+    # Step 2: alter the column type
+    with engine.begin() as conn:
         conn.execute(text(
             f"ALTER TABLE {q} ALTER COLUMN [emoji] NVARCHAR(32) NOT NULL"
         ))
+
+    # Step 3: recreate as unique index (idempotent)
+    with engine.begin() as conn:
         conn.execute(text(
-            f"CREATE UNIQUE NONCLUSTERED INDEX [uq_review_reactions_user_review_emoji] "
-            f"ON {q} (user_id, song_review_id, emoji)"
+            f"IF NOT EXISTS ("
+            f"  SELECT 1 FROM sys.indexes"
+            f"  WHERE name = '{idx_name}' AND object_id = OBJECT_ID(N'{table_name}')"
+            f") CREATE UNIQUE NONCLUSTERED INDEX [{idx_name}]"
+            f"  ON {q} (user_id, song_review_id, emoji)"
         ))
 
 
@@ -462,7 +491,14 @@ def ensure_model_table_columns(engine) -> None:
         _ensure_table_columns(engine, table)
     ensure_review_likes_one_per_user(engine)
     ensure_review_reactions_one_per_user_emoji(engine)
-    _ensure_mssql_emoji_nvarchar(engine)
-    _clean_mssql_corrupted_reactions(engine)
-    _ensure_mysql_emoji_utf8mb4(engine)
-    _clean_mysql_corrupted_reactions(engine)
+    # Emoji charset fixes — each isolated so one failure can't block the others
+    for fn in (
+        _ensure_mssql_emoji_nvarchar,
+        _clean_mssql_corrupted_reactions,
+        _ensure_mysql_emoji_utf8mb4,
+        _clean_mysql_corrupted_reactions,
+    ):
+        try:
+            fn(engine)
+        except Exception as exc:
+            _log.warning("schema_sync: %s failed (non-fatal): %s", fn.__name__, exc)

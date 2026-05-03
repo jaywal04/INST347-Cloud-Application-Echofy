@@ -187,6 +187,9 @@ class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     # CASCADE on user_id: when recipient is deleted, their notifications go with them.
     # NO ACTION on actor_id to avoid SQL Server multi-cascade-path error (both point to users).
+    # NO ACTION on review_id: CASCADE here would add a second CASCADE path from users
+    # (users→song_reviews→notifications) alongside user_id CASCADE — SQL Server error 1785.
+    # Account deletion removes notifications tied to the user's reviews in app code (auth).
     user_id = db.Column(
         db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -195,7 +198,7 @@ class Notification(db.Model):
         db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
     )
     review_id = db.Column(
-        db.Integer, db.ForeignKey("song_reviews.id", ondelete="CASCADE"), nullable=True
+        db.Integer, db.ForeignKey("song_reviews.id", ondelete="NO ACTION"), nullable=True
     )
     read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=utcnow_naive)

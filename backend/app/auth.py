@@ -25,6 +25,7 @@ from app.models import (
     PendingVerification,
     ReviewLike,
     ReviewReaction,
+    SongReview,
     User,
     UserFollow,
     utcnow_naive,
@@ -452,6 +453,10 @@ def delete_account():
     ReviewReaction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
     UserFollow.query.filter_by(followed_id=user.id).delete(synchronize_session=False)
     Notification.query.filter_by(actor_id=user.id).delete(synchronize_session=False)
+    # review_id is NO ACTION on MSSQL — clear rows pointing at this user's reviews before CASCADE drops them
+    _review_ids = [r[0] for r in db.session.query(SongReview.id).filter_by(user_id=user.id).all()]
+    if _review_ids:
+        Notification.query.filter(Notification.review_id.in_(_review_ids)).delete(synchronize_session=False)
     db.session.delete(pv)
     logout_user()
     db.session.delete(user)

@@ -1865,7 +1865,8 @@ footer a:hover { color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 .friends-card-link:hover {
   opacity: 0.85;
@@ -2057,3 +2058,61 @@ button.reviews-spotify-pick.spotify-track:hover {
   color: var(--text);
   line-height: 1.5;
 }
+
+/* Follow / secondary button */
+.btn-secondary {
+  background: transparent;
+  color: var(--accent);
+  padding: 0.8rem 1.4rem;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-secondary:hover { background: var(--accent); color: #fff; }
+
+/* Search results: two action buttons side by side */
+.friends-search-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Notification activity list */
+.notif-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.notif-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--navy-card);
+  border: 1px solid var(--navy-border);
+  border-radius: 4px;
+}
+
+.notif-activity-row.notif-unread {
+  border-left: 3px solid var(--accent);
+}
+
+.notif-activity-text { flex: 1; }
+
+.notif-activity-time {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.notif-review-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.notif-review-link:hover { text-decoration: underline; }

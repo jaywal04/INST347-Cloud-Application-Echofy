@@ -8,7 +8,7 @@ from sqlalchemy import and_, func, or_
 
 from app.blob_storage import signed_profile_image_url
 from app.database import db
-from app.models import FriendRequest, User, utcnow_naive
+from app.models import FriendRequest, Notification, User, UserFollow, utcnow_naive
 
 friends_bp = Blueprint("friends", __name__)
 
@@ -93,9 +93,16 @@ def search_users():
     )
     users = qry.order_by(User.username).limit(20).all()
 
+    following_ids = {
+        f.followed_id
+        for f in UserFollow.query.filter_by(follower_id=me_id).all()
+    }
     return jsonify(
         ok=True,
-        users=[{"id": u.id, "username": u.username} for u in users],
+        users=[
+            {"id": u.id, "username": u.username, "is_following": u.id in following_ids}
+            for u in users
+        ],
     )
 
 
@@ -119,8 +126,9 @@ def list_friends():
 @login_required
 def notification_count():
     me_id = current_user.id
-    count = FriendRequest.query.filter_by(to_user_id=me_id, status="pending").count()
-    return jsonify(ok=True, count=count)
+    friend_req_count = FriendRequest.query.filter_by(to_user_id=me_id, status="pending").count()
+    review_notif_count = Notification.query.filter_by(user_id=me_id, read=False).count()
+    return jsonify(ok=True, count=friend_req_count + review_notif_count)
 
 
 @friends_bp.get("/api/friends/requests/incoming")
@@ -245,5 +253,116 @@ def decline_request(request_id: int):
         return jsonify(ok=False, errors=["This request is no longer pending."]), 400
     fr.status = "declined"
     fr.updated_at = _now()
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@friends_bp.delete("/api/friends/<int:user_id>")
+@login_required
+def remove_friend(user_id: int):
+    me_id = current_user.id
+    fr = FriendRequest.query.filter(
+        FriendRequest.status == "accepted",
+        or_(
+            and_(FriendRequest.from_user_id == me_id, FriendRequest.to_user_id == user_id),
+            and_(FriendRequest.from_user_id == user_id, FriendRequest.to_user_id == me_id),
+        ),
+    ).first()
+    if not fr:
+        return jsonify(ok=False, errors=["Not friends with this user."]), 404
+    db.session.delete(fr)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Follow endpoints
+# ---------------------------------------------------------------------------
+
+@friends_bp.get("/api/follows/following")
+@login_required
+def list_following():
+    me_id = current_user.id
+    rows = UserFollow.query.filter_by(follower_id=me_id).all()
+    following = []
+    for r in rows:
+        following.append(_user_summary(r.followed))
+    following.sort(key=lambda x: x["username"].lower())
+    return jsonify(ok=True, following=following)
+
+
+@friends_bp.post("/api/follows")
+@login_required
+def follow_user():
+    data = request.get_json(silent=True) or {}
+    me_id = current_user.id
+    try:
+        target_id = int(data.get("user_id"))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, errors=["user_id is required."]), 400
+    if target_id == me_id:
+        return jsonify(ok=False, errors=["You cannot follow yourself."]), 400
+    target = db.session.get(User, target_id)
+    if not target:
+        return jsonify(ok=False, errors=["User not found."]), 404
+    existing = UserFollow.query.filter_by(follower_id=me_id, followed_id=target_id).first()
+    if existing:
+        return jsonify(ok=True, already_following=True)
+    db.session.add(UserFollow(follower_id=me_id, followed_id=target_id))
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@friends_bp.delete("/api/follows/<int:user_id>")
+@login_required
+def unfollow_user(user_id: int):
+    me_id = current_user.id
+    row = UserFollow.query.filter_by(follower_id=me_id, followed_id=user_id).first()
+    if not row:
+        return jsonify(ok=False, errors=["Not following this user."]), 404
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Notification endpoints
+# ---------------------------------------------------------------------------
+
+@friends_bp.get("/api/notifications")
+@login_required
+def list_notifications():
+    me_id = current_user.id
+    review_notifs = (
+        Notification.query.filter_by(user_id=me_id)
+        .order_by(Notification.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    items = []
+    for n in review_notifs:
+        item = {
+            "id": n.id,
+            "type": n.type,
+            "read": n.read,
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+            "actor": {"id": n.actor_id, "username": n.actor.username if n.actor else "Unknown"},
+        }
+        if n.review:
+            item["review"] = {
+                "id": n.review_id,
+                "name": n.review.name,
+                "rating": n.review.rating,
+                "artists": n.review.artists or "",
+            }
+        items.append(item)
+    return jsonify(ok=True, notifications=items)
+
+
+@friends_bp.post("/api/notifications/read")
+@login_required
+def mark_notifications_read():
+    me_id = current_user.id
+    Notification.query.filter_by(user_id=me_id, read=False).update({"read": True})
     db.session.commit()
     return jsonify(ok=True)

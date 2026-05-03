@@ -57,14 +57,20 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/users/<int:user_id>/profile` | Yes | Public profile view (respects privacy) |
-| GET | `/api/users/search` | Yes | Search users (excludes pending/accepted connections) |
+| GET | `/api/users/search` | Yes | Search users (excludes pending/accepted connections); each result includes `is_following` bool |
 | GET | `/api/friends` | Yes | Friends list |
-| GET | `/api/notifications/count` | Yes | Notification badge count |
+| GET | `/api/notifications/count` | Yes | Badge count = pending friend requests + unread Notification rows |
 | GET | `/api/friends/requests/incoming` | Yes | Incoming friend requests |
 | GET | `/api/friends/requests/outgoing` | Yes | Outgoing friend requests |
 | POST | `/api/friends/requests` | Yes | Send friend request (JSON with target user id) |
 | POST | `/api/friends/requests/<int:request_id>/accept` | Yes | Accept |
 | POST | `/api/friends/requests/<int:request_id>/decline` | Yes | Decline |
+| DELETE | `/api/friends/<int:user_id>` | Yes | Remove an accepted friend (deletes the friendship row) |
+| GET | `/api/follows/following` | Yes | List users the current user follows |
+| POST | `/api/follows` | Yes | Follow a user: JSON `{ "user_id": <int> }` |
+| DELETE | `/api/follows/<int:user_id>` | Yes | Unfollow a user |
+| GET | `/api/notifications` | Yes | Review-posted notifications (up to 50, newest first); marks unread on load |
+| POST | `/api/notifications/read` | Yes | Mark all notifications read |
 
 ---
 

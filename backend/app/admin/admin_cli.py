@@ -64,6 +64,8 @@ MENU = """
   7) Run custom SQL query (SELECT only)
   8) Reset a user's password
   9) Reset review_reactions table (empty all rows)
+  a) Diagnose emoji column (show type, constraints)
+  b) Force fix emoji column to NVARCHAR (step-by-step)
   0) Exit
 ============================================
 """
@@ -283,6 +285,189 @@ def clear_review_reactions():
     print(f"  Removed {count} reaction(s). Table is now empty.")
 
 
+def diagnose_emoji_column():
+    """Show the emoji column type, all indexes/constraints, and corrupted row count."""
+    engine = db.engine
+    if engine.dialect.name != "mssql":
+        print("  This diagnostic is for MSSQL only.")
+        return
+
+    table_name = "review_reactions"
+    print(f"\n  --- {table_name}.emoji DIAGNOSIS ---")
+
+    # Column type
+    with engine.connect() as conn:
+        row = conn.execute(text(
+            "SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE "
+            "FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_NAME = :t AND COLUMN_NAME = 'emoji'"
+        ), {"t": table_name}).fetchone()
+    if not row:
+        print("  ERROR: Column 'emoji' not found.")
+        return
+    dtype, maxlen, nullable = row
+    print(f"\n  Column: emoji  Type: {dtype}({maxlen})  Nullable: {nullable}")
+    if dtype.upper() == "NVARCHAR":
+        print("  -> NVARCHAR is correct. Emoji should store fine.")
+    else:
+        print("  -> NOT NVARCHAR — this is why emoji appear as '??'. Needs ALTER COLUMN.")
+
+    # Key constraints
+    print(f"\n  Key constraints on {table_name}:")
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT name, type_desc FROM sys.key_constraints "
+            "WHERE parent_object_id = OBJECT_ID(:t)"
+        ), {"t": table_name}).fetchall()
+    if rows:
+        for r in rows:
+            print(f"    - {r[0]}  ({r[1]})")
+    else:
+        print("    (none)")
+
+    # Indexes
+    print(f"\n  Indexes on {table_name}:")
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT name, is_unique, is_unique_constraint, type_desc "
+            "FROM sys.indexes "
+            "WHERE object_id = OBJECT_ID(:t) AND name IS NOT NULL"
+        ), {"t": table_name}).fetchall()
+    if rows:
+        for r in rows:
+            print(f"    - {r[0]}  unique={r[1]}  is_constraint={r[2]}  type={r[3]}")
+    else:
+        print("    (none)")
+
+    # Corrupted rows
+    with engine.connect() as conn:
+        count = conn.execute(text(
+            "SELECT COUNT(*) FROM [review_reactions] "
+            "WHERE PATINDEX('%[^ -~]%', [emoji]) = 0"
+        )).scalar()
+    print(f"\n  Corrupted rows (emoji stored as '?'): {count}")
+
+
+def _force_clean_corrupted(engine, q):
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(text(
+                f"DELETE FROM {q} WHERE PATINDEX('%[^ -~]%', [emoji]) = 0"
+            ))
+        print(f"    Deleted {result.rowcount} corrupted row(s).")
+    except Exception as exc:
+        print(f"    WARNING: Cleanup failed: {exc}")
+
+
+def force_fix_emoji_column():
+    """Step-by-step ALTER COLUMN emoji → NVARCHAR with full error output."""
+    engine = db.engine
+    if engine.dialect.name != "mssql":
+        print("  This fix is for MSSQL only.")
+        return
+
+    table_name = "review_reactions"
+    q = "[review_reactions]"
+    idx_name = "uq_review_reactions_user_review_emoji"
+
+    print(f"\n  --- Force fix {table_name}.emoji ---")
+
+    # Check current type
+    with engine.connect() as conn:
+        row = conn.execute(text(
+            "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_NAME = :t AND COLUMN_NAME = 'emoji'"
+        ), {"t": table_name}).fetchone()
+    if not row:
+        print("  ERROR: Cannot find column 'emoji' in INFORMATION_SCHEMA.")
+        return
+    print(f"  Current type: {row[0]}")
+    if row[0].upper() == "NVARCHAR":
+        print("  Column is already NVARCHAR. Running corrupted-row cleanup only...")
+        _force_clean_corrupted(engine, q)
+        return
+
+    # Step 1a: drop as key constraint
+    print(f"\n  Step 1a: Drop [{idx_name}] as key constraint...")
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(text(
+                "SELECT name FROM sys.key_constraints "
+                "WHERE name = :n AND parent_object_id = OBJECT_ID(:t)"
+            ), {"n": idx_name, "t": table_name}).fetchone()
+            if exists:
+                conn.execute(text(f"ALTER TABLE {q} DROP CONSTRAINT [{idx_name}]"))
+                print(f"    Dropped key constraint [{idx_name}]")
+            else:
+                print(f"    Not found as key constraint — skipping.")
+    except Exception as exc:
+        print(f"    FAILED: {exc}")
+        return
+
+    # Step 1b: drop as standalone index
+    print(f"\n  Step 1b: Drop [{idx_name}] as standalone index...")
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(text(
+                "SELECT name FROM sys.indexes "
+                "WHERE name = :n AND object_id = OBJECT_ID(:t) AND is_unique_constraint = 0"
+            ), {"n": idx_name, "t": table_name}).fetchone()
+            if exists:
+                conn.execute(text(f"DROP INDEX [{idx_name}] ON {q}"))
+                print(f"    Dropped index [{idx_name}]")
+            else:
+                print(f"    Not found as standalone index — skipping.")
+    except Exception as exc:
+        print(f"    FAILED: {exc}")
+        return
+
+    # Check for any remaining indexes on emoji column
+    print(f"\n  Checking for any remaining indexes referencing emoji column...")
+    with engine.connect() as conn:
+        remaining = conn.execute(text(
+            "SELECT i.name FROM sys.indexes i "
+            "JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id "
+            "JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id "
+            "WHERE i.object_id = OBJECT_ID(N'review_reactions') AND c.name = 'emoji' "
+            "AND i.name IS NOT NULL"
+        )).fetchall()
+    if remaining:
+        print(f"  WARNING: Still have indexes on emoji: {[r[0] for r in remaining]}")
+        print(f"  The ALTER COLUMN may still fail.")
+    else:
+        print(f"    No remaining indexes on emoji. Proceeding.")
+
+    # Step 2: ALTER COLUMN
+    print(f"\n  Step 2: ALTER COLUMN emoji → NVARCHAR(32)...")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {q} ALTER COLUMN [emoji] NVARCHAR(32) NOT NULL"))
+        print(f"    SUCCESS: Column is now NVARCHAR(32).")
+    except Exception as exc:
+        print(f"    FAILED: {exc}")
+        return
+
+    # Step 3: recreate index
+    print(f"\n  Step 3: Recreate unique index [{idx_name}]...")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                f"IF NOT EXISTS ("
+                f"  SELECT 1 FROM sys.indexes WHERE name = '{idx_name}' AND object_id = OBJECT_ID(N'{table_name}')"
+                f") CREATE UNIQUE NONCLUSTERED INDEX [{idx_name}] ON {q} (user_id, song_review_id, emoji)"
+            ))
+        print(f"    SUCCESS.")
+    except Exception as exc:
+        print(f"    WARNING: Could not recreate index: {exc}")
+
+    # Step 4: clean corrupted rows
+    print(f"\n  Step 4: Delete corrupted '?' rows...")
+    _force_clean_corrupted(engine, q)
+
+    print(f"\n  Done. Emoji reactions should now work correctly.")
+    print(f"  Restart the app if it is currently running.")
+
+
 def main():
     with app.app_context():
         print("\n  Connected to:", app.config["SQLALCHEMY_DATABASE_URI"][:80] + "...")
@@ -309,6 +494,10 @@ def main():
                 reset_password()
             elif choice == "9":
                 clear_review_reactions()
+            elif choice == "a":
+                diagnose_emoji_column()
+            elif choice == "b":
+                force_fix_emoji_column()
             elif choice == "0":
                 print("\n  Goodbye.\n")
                 sys.exit(0)

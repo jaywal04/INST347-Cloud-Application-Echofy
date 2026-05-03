@@ -21,10 +21,12 @@ from app.database import db
 from app.email_service import send_verification_code
 from app.models import (
     FriendRequest,
+    Notification,
     PendingVerification,
     ReviewLike,
     ReviewReaction,
     User,
+    UserFollow,
     utcnow_naive,
 )
 
@@ -448,6 +450,8 @@ def delete_account():
     ).delete(synchronize_session=False)
     ReviewLike.query.filter_by(user_id=user.id).delete(synchronize_session=False)
     ReviewReaction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    UserFollow.query.filter_by(followed_id=user.id).delete(synchronize_session=False)
+    Notification.query.filter_by(actor_id=user.id).delete(synchronize_session=False)
     db.session.delete(pv)
     logout_user()
     db.session.delete(user)

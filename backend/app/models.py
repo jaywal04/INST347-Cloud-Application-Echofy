@@ -156,6 +156,54 @@ class SongReview(db.Model):
         }
 
 
+class UserFollow(db.Model):
+    """One-way follow: follower watches followed user's new reviews."""
+
+    __tablename__ = "user_follows"
+    __table_args__ = (
+        db.UniqueConstraint("follower_id", "followed_id", name="uq_user_follows_pair"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    # CASCADE on follower: deleting your account removes your outgoing follows.
+    # NO ACTION on followed: if followed user deletes, app code removes the rows.
+    follower_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    followed_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
+    )
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+
+    follower = db.relationship("User", foreign_keys=[follower_id])
+    followed = db.relationship("User", foreign_keys=[followed_id])
+
+
+class Notification(db.Model):
+    """Activity notification for a user (new review posted by a followed user or friend)."""
+
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    # CASCADE on user_id: when recipient is deleted, their notifications go with them.
+    # NO ACTION on actor_id to avoid SQL Server multi-cascade-path error (both point to users).
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    type = db.Column(db.String(40), nullable=False)  # "review_posted"
+    actor_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
+    )
+    review_id = db.Column(
+        db.Integer, db.ForeignKey("song_reviews.id", ondelete="CASCADE"), nullable=True
+    )
+    read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+
+    actor = db.relationship("User", foreign_keys=[actor_id])
+    review = db.relationship("SongReview", foreign_keys=[review_id])
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 

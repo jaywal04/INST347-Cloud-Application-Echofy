@@ -15,11 +15,13 @@ _log = logging.getLogger(__name__)
 
 from app.models import (
     FriendRequest,
+    Notification,
     PendingVerification,
     ReviewLike,
     ReviewReaction,
     SongReview,
     User,
+    UserFollow,
 )
 
 
@@ -419,12 +421,17 @@ def _ensure_mssql_emoji_nvarchar(engine) -> None:
             "WHERE TABLE_NAME = :t AND COLUMN_NAME = 'emoji'"
         ), {"t": table_name}).fetchone()
     if row and row[0].upper() == "NVARCHAR":
+        _log.info("schema_sync: emoji column is already NVARCHAR — no action needed")
         return
+
+    current_type = row[0] if row else "UNKNOWN"
+    _log.info("schema_sync: emoji column is %s — starting NVARCHAR migration", current_type)
 
     q = _quote_table_mssql(table_name)
     idx_name = "uq_review_reactions_user_review_emoji"
 
     # Step 1a: drop as UNIQUE CONSTRAINT (created by db.create_all via UniqueConstraint)
+    _log.info("schema_sync: step 1a — dropping key constraint %s if present", idx_name)
     with engine.begin() as conn:
         conn.execute(text(
             f"IF EXISTS ("
@@ -434,6 +441,7 @@ def _ensure_mssql_emoji_nvarchar(engine) -> None:
         ))
 
     # Step 1b: drop as standalone UNIQUE INDEX (created by schema_sync on legacy DBs)
+    _log.info("schema_sync: step 1b — dropping standalone index %s if present", idx_name)
     with engine.begin() as conn:
         conn.execute(text(
             f"IF EXISTS ("
@@ -444,12 +452,15 @@ def _ensure_mssql_emoji_nvarchar(engine) -> None:
         ))
 
     # Step 2: alter the column type
+    _log.info("schema_sync: step 2 — ALTER COLUMN emoji NVARCHAR(32)")
     with engine.begin() as conn:
         conn.execute(text(
             f"ALTER TABLE {q} ALTER COLUMN [emoji] NVARCHAR(32) NOT NULL"
         ))
+    _log.info("schema_sync: step 2 complete — emoji column is now NVARCHAR(32)")
 
     # Step 3: recreate as unique index (idempotent)
+    _log.info("schema_sync: step 3 — recreating unique index %s", idx_name)
     with engine.begin() as conn:
         conn.execute(text(
             f"IF NOT EXISTS ("
@@ -458,6 +469,7 @@ def _ensure_mssql_emoji_nvarchar(engine) -> None:
             f") CREATE UNIQUE NONCLUSTERED INDEX [{idx_name}]"
             f"  ON {q} (user_id, song_review_id, emoji)"
         ))
+    _log.info("schema_sync: step 3 complete — NVARCHAR migration done")
 
 
 def _clean_mssql_corrupted_reactions(engine) -> None:
@@ -487,6 +499,8 @@ def ensure_model_table_columns(engine) -> None:
         SongReview.__table__,
         ReviewLike.__table__,
         ReviewReaction.__table__,
+        UserFollow.__table__,
+        Notification.__table__,
     ):
         _ensure_table_columns(engine, table)
     ensure_review_likes_one_per_user(engine)

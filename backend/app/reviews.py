@@ -11,7 +11,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
 from app.database import db
-from app.models import ReviewLike, ReviewReaction, SongReview, User, utcnow_naive
+from app.models import FriendRequest, Notification, ReviewLike, ReviewReaction, SongReview, User, UserFollow, utcnow_naive
 
 
 reviews_bp = Blueprint("reviews", __name__, url_prefix="/api/reviews")
@@ -494,6 +494,38 @@ def remove_review_reaction(review_id: int):
     return jsonify(ok=True, **snap)
 
 
+def _notify_followers_and_friends(actor_id: int, review_id: int) -> None:
+    """Create review_posted notifications for all followers and friends of actor."""
+    follower_ids = {
+        row.follower_id
+        for row in UserFollow.query.filter_by(followed_id=actor_id).all()
+    }
+    from sqlalchemy import and_, or_
+    friend_rows = FriendRequest.query.filter(
+        FriendRequest.status == "accepted",
+        or_(
+            and_(FriendRequest.from_user_id == actor_id),
+            and_(FriendRequest.to_user_id == actor_id),
+        ),
+    ).all()
+    friend_ids = {
+        r.to_user_id if r.from_user_id == actor_id else r.from_user_id
+        for r in friend_rows
+    }
+    recipients = (follower_ids | friend_ids) - {actor_id}
+    for uid in recipients:
+        db.session.add(
+            Notification(
+                user_id=uid,
+                type="review_posted",
+                actor_id=actor_id,
+                review_id=review_id,
+            )
+        )
+    if recipients:
+        db.session.commit()
+
+
 @reviews_bp.get("")
 @login_required
 def list_reviews():
@@ -537,7 +569,8 @@ def upsert_review():
         user_id=current_user.id,
         item_hash=item_hash,
     ).first()
-    if review is None:
+    is_new = review is None
+    if is_new:
         review = SongReview(user_id=current_user.id, item_hash=item_hash, item_key=item_key)
         db.session.add(review)
 
@@ -553,4 +586,8 @@ def upsert_review():
     review.updated_at = utcnow_naive()
 
     db.session.commit()
+
+    if is_new:
+        _notify_followers_and_friends(current_user.id, review.id)
+
     return jsonify(ok=True, review=review.to_dict())

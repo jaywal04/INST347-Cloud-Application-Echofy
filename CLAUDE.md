@@ -34,6 +34,10 @@ For **substantive** work — UI/design, backend or API, database/models, Spotify
 1. **Update** the relevant `*.md` in **`.cursor/skills/`**.
 2. **Copy** `.cursor/skills/*.md` to **`.agents/skills/`**, **`.claude/skills/`**, and **`.codex/skills/`** so all copies match.
 
+## Git — commit and push (required)
+
+**Never run `git commit` or `git push` unless the user explicitly asks.** Make code changes, then stop. Wait for the user to say "commit", "commit and push", or equivalent before touching git.
+
 ## One-shot sync (bash, repo root)
 
 ```bash

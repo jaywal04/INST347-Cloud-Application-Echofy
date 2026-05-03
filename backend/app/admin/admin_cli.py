@@ -24,7 +24,7 @@ from flask import Flask
 from sqlalchemy import func, inspect, or_, text
 
 from app.database import apply_remote_db_engine_options, db, _build_database_uri
-from app.models import FriendRequest, User
+from app.models import FriendRequest, ReviewReaction, User
 
 
 def create_admin_app():
@@ -63,6 +63,7 @@ MENU = """
   6) Count rows in a table
   7) Run custom SQL query (SELECT only)
   8) Reset a user's password
+  9) Reset review_reactions table (empty all rows)
   0) Exit
 ============================================
 """
@@ -267,6 +268,21 @@ def reset_password():
     print(f"  Password updated for '{user.username}'.")
 
 
+def clear_review_reactions():
+    count = db.session.query(func.count(ReviewReaction.id)).scalar()
+    print(f"\n  review_reactions currently has {count} row(s).")
+    if count == 0:
+        print("  Table is already empty.")
+        return
+    confirm = input("  Type 'RESET' to empty the table (rows removed, table kept): ").strip()
+    if confirm != "RESET":
+        print("  Cancelled.")
+        return
+    db.session.query(ReviewReaction).delete(synchronize_session=False)
+    db.session.commit()
+    print(f"  Removed {count} reaction(s). Table is now empty.")
+
+
 def main():
     with app.app_context():
         print("\n  Connected to:", app.config["SQLALCHEMY_DATABASE_URI"][:80] + "...")
@@ -291,6 +307,8 @@ def main():
                 run_query()
             elif choice == "8":
                 reset_password()
+            elif choice == "9":
+                clear_review_reactions()
             elif choice == "0":
                 print("\n  Goodbye.\n")
                 sys.exit(0)

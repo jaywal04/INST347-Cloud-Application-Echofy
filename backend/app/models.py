@@ -101,7 +101,7 @@ class ReviewReaction(db.Model):
     song_review_id = db.Column(
         db.Integer, db.ForeignKey("song_reviews.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    emoji = db.Column(db.String(32), nullable=False)
+    emoji = db.Column(db.Unicode(32), nullable=False)
     created_at = db.Column(db.DateTime, default=utcnow_naive)
 
 

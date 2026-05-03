@@ -393,6 +393,63 @@ def _ensure_mysql_emoji_utf8mb4(engine) -> None:
         ))
 
 
+def _ensure_mssql_emoji_nvarchar(engine) -> None:
+    """ALTER the emoji column from VARCHAR to NVARCHAR on MSSQL if needed.
+
+    db.create_all() maps String(32) → VARCHAR(32) on SQL Server, which is
+    non-Unicode and silently corrupts 4-byte emoji to '?'.  NVARCHAR is required.
+    The unique index on (user_id, song_review_id, emoji) must be dropped first,
+    then recreated after the column type change.
+    """
+    if engine.dialect.name != "mssql":
+        return
+    table_name = ReviewReaction.__tablename__
+    insp = inspect(engine)
+    if not insp.has_table(table_name):
+        return
+    with engine.connect() as conn:
+        row = conn.execute(text(
+            "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_NAME = :t AND COLUMN_NAME = 'emoji'"
+        ), {"t": table_name}).fetchone()
+    if row and row[0].upper() == "NVARCHAR":
+        return
+    q = _quote_table_mssql(table_name)
+    # Drop the unique index/constraint that covers the emoji column before altering
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = "
+            f"'uq_review_reactions_user_review_emoji' AND object_id = OBJECT_ID(N'{table_name}')) "
+            f"DROP INDEX [uq_review_reactions_user_review_emoji] ON {q}"
+        ))
+        conn.execute(text(
+            f"ALTER TABLE {q} ALTER COLUMN [emoji] NVARCHAR(32) NOT NULL"
+        ))
+        conn.execute(text(
+            f"CREATE UNIQUE NONCLUSTERED INDEX [uq_review_reactions_user_review_emoji] "
+            f"ON {q} (user_id, song_review_id, emoji)"
+        ))
+
+
+def _clean_mssql_corrupted_reactions(engine) -> None:
+    """Delete reaction rows whose emoji was corrupted to '?' by a VARCHAR column on MSSQL.
+
+    Real emoji always contain at least one character outside printable ASCII (U+0020–U+007E).
+    Rows where emoji has no such character are corrupted and safe to remove.
+    """
+    if engine.dialect.name != "mssql":
+        return
+    table_name = ReviewReaction.__tablename__
+    insp = inspect(engine)
+    if not insp.has_table(table_name):
+        return
+    q = _quote_table_mssql(table_name)
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"DELETE FROM {q} WHERE PATINDEX('%[^ -~]%', [emoji]) = 0"
+        ))
+
+
 def ensure_model_table_columns(engine) -> None:
     for table in (
         User.__table__,
@@ -405,5 +462,7 @@ def ensure_model_table_columns(engine) -> None:
         _ensure_table_columns(engine, table)
     ensure_review_likes_one_per_user(engine)
     ensure_review_reactions_one_per_user_emoji(engine)
+    _ensure_mssql_emoji_nvarchar(engine)
+    _clean_mssql_corrupted_reactions(engine)
     _ensure_mysql_emoji_utf8mb4(engine)
     _clean_mysql_corrupted_reactions(engine)

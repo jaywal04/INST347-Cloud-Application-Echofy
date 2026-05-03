@@ -37,6 +37,10 @@ When you make **material** changes — for example **new UI/design**, **backend 
    - `.cursor/skills/*.md` → `.claude/skills/`
    - `.cursor/skills/*.md` → `.codex/skills/`
 
+## Git — commit and push (required)
+
+**Never run `git commit` or `git push` unless the user explicitly asks.** Make code changes, then stop. Wait for the user to say "commit", "commit and push", or equivalent before touching git.
+
 ## Copy command (repo root, PowerShell)
 
 ```powershell

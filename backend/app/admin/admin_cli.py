@@ -24,7 +24,8 @@ from flask import Flask
 from sqlalchemy import func, inspect, or_, text
 
 from app.database import apply_remote_db_engine_options, db, _build_database_uri
-from app.models import FriendRequest, ReviewReaction, User
+from app.models import FriendRequest, Notification, ReviewLike, ReviewReaction, SongReview, User, UserFollow
+from app.schema_sync import ensure_model_table_columns
 
 
 def create_admin_app():
@@ -178,18 +179,33 @@ def delete_user():
         print(f"  User '{identifier}' not found.")
         return
 
+    review_count = SongReview.query.filter_by(user_id=user.id).count()
     print(f"\n  About to delete: {user.username} ({user.email}), ID={user.id}")
+    if review_count:
+        print(f"  {review_count} review(s) will be kept with username shown as '[deleted]'.")
     confirm = input("  Type 'DELETE' to confirm: ").strip()
     if confirm != "DELETE":
         print("  Cancelled.")
         return
 
+    username = user.username
+    # Anonymize reviews — keep content public but detach from this account
+    SongReview.query.filter_by(user_id=user.id).update(
+        {"display_username": "[deleted]", "user_id": None},
+        synchronize_session=False,
+    )
+    db.session.flush()
+    # Remove all social connections
     FriendRequest.query.filter(
         or_(FriendRequest.from_user_id == user.id, FriendRequest.to_user_id == user.id)
     ).delete(synchronize_session=False)
+    ReviewLike.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    ReviewReaction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    UserFollow.query.filter_by(followed_id=user.id).delete(synchronize_session=False)
+    Notification.query.filter_by(actor_id=user.id).delete(synchronize_session=False)
     db.session.delete(user)
     db.session.commit()
-    print(f"  User '{user.username}' has been deleted.")
+    print(f"  User '{username}' has been deleted.")
 
 
 def count_rows():
@@ -484,6 +500,7 @@ def force_fix_emoji_column():
 def main():
     with app.app_context():
         print("\n  Connected to:", app.config["SQLALCHEMY_DATABASE_URI"][:80] + "...")
+        ensure_model_table_columns(db.engine)
 
         while True:
             print(MENU)

@@ -68,7 +68,6 @@
       { href: base + '/review', text: 'Reviews', active: activeSeg === 'review' },
       { href: base + '/posts', text: 'My posts', active: activeSeg === 'posts' },
       { href: base + '/friends', text: 'Friends', active: activeSeg === 'friends' },
-      { href: '#', text: 'Your Echo', active: false },
     ]);
   }
 
@@ -85,7 +84,6 @@
       { href: '/discover', text: 'Discover', active: activeDiscover },
       { href: '/review', text: 'Reviews', active: activeReview },
       { href: '/posts', text: 'My posts', active: activePosts },
-      { href: '#', text: 'Your Echo', active: false },
     ]);
   }
 
@@ -149,8 +147,21 @@
         profileLink.className += ' is-active';
       }
 
+      var aiBtn = document.createElement('button');
+      aiBtn.id = 'echofy-ai-nav-btn';
+      aiBtn.type = 'button';
+      aiBtn.className = 'nav-ai-btn';
+      aiBtn.title = 'Echo AI';
+      aiBtn.setAttribute('aria-label', 'Open Echo AI');
+      aiBtn.innerHTML =
+        '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">' +
+          '<path d="M12 3l1.8 5.2L19 9.9l-5.2 1.8L12 17l-1.8-5.2L5 9.9l5.2-1.8L12 3Z"/>' +
+          '<path d="M19 15l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z"/>' +
+        '</svg>';
+
       authDiv.innerHTML = '';
       authDiv.appendChild(bellLink);
+      authDiv.appendChild(aiBtn);
       authDiv.appendChild(profileLink);
 
       var heroSignup = document.getElementById('hero-signup-link');

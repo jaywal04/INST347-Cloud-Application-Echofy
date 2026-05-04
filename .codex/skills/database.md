@@ -41,7 +41,7 @@ Priority:
 | `friend_requests` | Directed requests (`from_user_id`, `to_user_id`, `status`); unique on (from, to); FK `NO ACTION` to satisfy SQL Server cascade rules |
 | `song_reviews` | Per-user ratings/reviews keyed by `item_hash` (SHA-256 of canonical item key); unique (user_id, item_hash) |
 | `review_likes` | `ReviewLike` — likes on reviews; **unique** `(user_id, song_review_id)`; `song_review_id` **ON DELETE CASCADE** (deleting a review removes its likes); `user_id` **ON DELETE NO ACTION** so SQL Server avoids error 1785 (multiple cascade paths from `users`). Account deletion removes the user’s like rows in app code before deleting `users`. |
-| `review_reactions` | `ReviewReaction` — allowlisted emoji per review; **unique** `(user_id, song_review_id, emoji)`; same FK pattern as likes (`user_id` NO ACTION, `song_review_id` CASCADE); emoji values validated in `reviews.py` |
+| `review_reactions` | `ReviewReaction` — allowlisted emoji per review; **unique** `(user_id, song_review_id, emoji)`; same FK pattern as likes (`user_id` NO ACTION, `song_review_id` CASCADE); emoji values validated in `reviews.py`. On MSSQL the `emoji` column **must** be `NVARCHAR(32) COLLATE Latin1_General_BIN2`: default collations treat all supplementary-plane characters (emoji, U+1F000+) as equal, making the unique index consider every emoji the same. `schema_sync._ensure_mssql_emoji_nvarchar` applies this fix at startup; admin option `b` can force it manually. |
 | `user_follows` | `UserFollow` — follower/followed edges; `follower_id` CASCADE, `followed_id` NO ACTION (see `auth.delete_account` cleanup) |
 | `notifications` | `Notification` — `user_id` CASCADE, `actor_id` NO ACTION, `review_id` **NO ACTION** (not CASCADE): CASCADE on `review_id` would duplicate the CASCADE path from `users` via `song_reviews` and **SQL Server rejects the table (error 1785)**. Rows referencing a user’s reviews are deleted in app code before account deletion. |
 
@@ -52,3 +52,20 @@ Priority:
 ## Friend graph
 
 Accepted friendship is represented by a `friend_requests` row with `status='accepted'` (not a separate edges table).
+
+## Follow graph
+
+One-way follows live in `user_follows`. Deleting the follower cascades (their follows are removed); deleting the followed user does **not** cascade — `auth.delete_account` removes incoming `user_follows` rows in app code before the `users` row is deleted.
+
+## Notifications
+
+`notifications` rows are created by `reviews.py` (`_notify_followers_and_friends`) whenever a **new** review (not an edit) is posted. All followers + accepted friends of the reviewer receive a `review_posted` notification. On account deletion `auth.delete_account` removes any notifications where the deleted user was the `actor`.
+
+## MSSQL emoji column fix (schema_sync)
+
+`_ensure_mssql_emoji_nvarchar` in `schema_sync.py` runs at every app startup and:
+1. Checks `INFORMATION_SCHEMA.COLUMNS` for `DATA_TYPE = NVARCHAR` AND `COLLATION_NAME` contains `BIN2`.
+2. If not, drops the unique constraint/index on `review_reactions`, runs `ALTER COLUMN emoji NVARCHAR(32) COLLATE Latin1_General_BIN2 NOT NULL`, and recreates the index.
+3. `_clean_mssql_corrupted_reactions` then deletes any `??` rows leftover from before the fix.
+
+Admin CLI option `a` diagnoses the current state; option `b` force-runs the fix with step-by-step output.

@@ -92,6 +92,15 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 
 ---
 
+## Echo AI chat (`ai_chat.py`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/chat/status` | No | `{ ok, configured: bool }` — whether Azure AI Foundry env vars are set |
+| POST | `/api/chat` | Yes | JSON `{ "message": "<str>", "history": [{"role","content"},…] }` — sends message + optional prior turns to Azure AI Foundry with top community reviews as context; returns `{ ok, reply }`. Model, endpoint, and key from env vars `AZURE_AI_FOUNDRY_ENDPOINT`, `AZURE_AI_FOUNDRY_KEY`, `AZURE_AI_FOUNDRY_MODEL`. |
+
+---
+
 ## Telemetry (`telemetry.py` — prefix `/api/telemetry`)
 
 | Method | Path | Auth | Description |

@@ -31,13 +31,15 @@
 | Module | Role |
 |--------|------|
 | `main.py` | App factory, Spotify OAuth, Spotify JSON routes, CORS/session |
-| `auth.py` | Blueprint `auth`: `/api/auth/*` signup, login, profile, privacy, delete |
-| `friends.py` | Blueprint `friends`: friends list, requests, user search, public profiles |
-| `reviews.py` | Blueprint `reviews`, `url_prefix='/api/reviews'` |
+| `auth.py` | Blueprint `auth`: `/api/auth/*` signup, login, profile, privacy, delete account (also cleans `UserFollow`/`Notification` rows for the deleted user in app code) |
+| `friends.py` | Blueprint `friends`: friends list, requests, user search, public profiles, follow/unfollow (`/api/follows/*`), review notifications (`/api/notifications`) |
+| `reviews.py` | Blueprint `reviews`, `url_prefix='/api/reviews'`; includes like/reaction endpoints; fires `Notification` rows to followers + friends on new review post |
 | `telemetry.py` | Blueprint `telemetry`, `url_prefix='/api/telemetry'` |
 | `database.py` | SQLAlchemy `db`, URI build, pool options for remote DB |
-| `models.py` | `User`, `PendingVerification`, `FriendRequest`, `SongReview` |
-| `schema_sync.py` | Aligns DB columns with models (esp. `users`) |
+| `models.py` | `User`, `PendingVerification`, `FriendRequest`, `SongReview`, `ReviewLike`, `ReviewReaction`, `UserFollow`, `Notification` |
+| `schema_sync.py` | Adds missing columns on existing tables; dedupes and adds unique indexes for `review_likes` and `review_reactions`; fixes `review_reactions.emoji` column to `NVARCHAR(32) COLLATE Latin1_General_BIN2` on MSSQL so emoji are stored correctly and compared distinctly |
+| `admin/admin_cli.py` | Interactive admin tool: list tables, manage users, reset reactions, diagnose and force-fix the emoji column type/collation |
+| `ai_chat.py` | Blueprint `ai_chat`: `GET /api/chat/status` (configured check), `POST /api/chat` (login-required; sends user message + multi-turn history to Azure AI Foundry with top community reviews as context) |
 | `spotify_client.py` | HTTP calls to Spotify, token resolution, response shaping |
 | `blob_storage.py` | Azure Blob profile images (optional) |
 | `email_service.py` | Verification emails |

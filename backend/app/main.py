@@ -15,6 +15,7 @@ from flask_cors import CORS
 from flask_login import LoginManager, current_user
 from sqlalchemy.exc import DBAPIError, OperationalError
 
+from app.ai_chat import ai_chat_bp
 from app.auth import auth_bp
 from app.friends import friends_bp
 from app.database import db, init_db
@@ -300,6 +301,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(friends_bp)
     app.register_blueprint(reviews_bp)
+    app.register_blueprint(ai_chat_bp)
 
     @app.errorhandler(OperationalError)
     @app.errorhandler(DBAPIError)

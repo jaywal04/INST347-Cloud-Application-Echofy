@@ -223,7 +223,7 @@ def allowed_review_reactions():
 def recent_reviews():
     rows = (
         db.session.query(SongReview, User)
-        .join(User, SongReview.user_id == User.id)
+        .outerjoin(User, SongReview.user_id == User.id)
         .order_by(SongReview.updated_at.desc())
         .limit(10)
         .all()
@@ -235,7 +235,7 @@ def recent_reviews():
     result = []
     for review, user in rows:
         d = review.to_dict()
-        d["username"] = user.username
+        d["username"] = user.username if user else (review.display_username or "[deleted]")
         _apply_like_fields(d, review.id, meta)
         _apply_reaction_fields(d, review.id, rmeta)
         result.append(d)
@@ -258,7 +258,7 @@ def browse_reviews():
     except (TypeError, ValueError):
         offset = 0
 
-    q = db.session.query(SongReview, User).join(User, SongReview.user_id == User.id)
+    q = db.session.query(SongReview, User).outerjoin(User, SongReview.user_id == User.id)
     lc = None
     if sort == "top":
         lc = _like_counts_subquery()
@@ -314,7 +314,7 @@ def browse_reviews():
     result = []
     for review, user in rows:
         d = review.to_dict()
-        d["username"] = user.username
+        d["username"] = user.username if user else (review.display_username or "[deleted]")
         _apply_like_fields(d, review.id, meta)
         _apply_reaction_fields(d, review.id, rmeta)
         result.append(d)
@@ -354,7 +354,7 @@ def reviews_for_item():
     lc = _like_counts_subquery()
     rows = (
         db.session.query(SongReview, User)
-        .join(User, SongReview.user_id == User.id)
+        .outerjoin(User, SongReview.user_id == User.id)
         .outerjoin(lc, SongReview.id == lc.c.rid)
         .filter(SongReview.item_hash == item_hash)
         .order_by(
@@ -372,7 +372,7 @@ def reviews_for_item():
     result = []
     for review, user in rows:
         d = review.to_dict()
-        d["username"] = user.username
+        d["username"] = user.username if user else (review.display_username or "[deleted]")
         _apply_like_fields(d, review.id, meta)
         _apply_reaction_fields(d, review.id, rmeta)
         result.append(d)

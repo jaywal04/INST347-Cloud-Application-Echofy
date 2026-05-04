@@ -357,6 +357,61 @@ def _clean_mssql_corrupted_reactions(engine) -> None:
         ))
 
 
+def _ensure_song_reviews_user_id_nullable(engine) -> None:
+    """Make song_reviews.user_id nullable so deleted-user reviews can persist with user_id=NULL.
+
+    On existing MSSQL DBs the column was created NOT NULL with a CASCADE FK.
+    We need to: drop that FK, alter the column to NULL, add a NO ACTION FK.
+    SQLite ALTER COLUMN is not supported; local-dev DBs can be recreated.
+    """
+    if engine.dialect.name != "mssql":
+        return
+    table_name = SongReview.__tablename__
+    insp = inspect(engine)
+    if not insp.has_table(table_name):
+        return
+
+    # Check if already nullable
+    for col in insp.get_columns(table_name):
+        if col["name"].lower() == "user_id":
+            if col["nullable"]:
+                return  # already done
+            break
+
+    q = _quote_table_mssql(table_name)
+
+    # Find and drop any FK from song_reviews.user_id → users.id
+    with engine.connect() as conn:
+        fk_rows = conn.execute(text(
+            "SELECT fk.name FROM sys.foreign_keys fk "
+            "JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id "
+            "JOIN sys.columns c ON c.object_id = fkc.parent_object_id "
+            "  AND c.column_id = fkc.parent_column_id "
+            "WHERE fk.parent_object_id = OBJECT_ID(:t) AND c.name = 'user_id'"
+        ), {"t": table_name}).fetchall()
+    for row in fk_rows:
+        fk_name = row[0]
+        _log.info("schema_sync: dropping FK %s on %s.user_id", fk_name, table_name)
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {q} DROP CONSTRAINT [{fk_name}]"))
+
+    _log.info("schema_sync: altering %s.user_id to NULL", table_name)
+    with engine.begin() as conn:
+        conn.execute(text(f"ALTER TABLE {q} ALTER COLUMN [user_id] INT NULL"))
+
+    # Recreate FK without CASCADE (NO ACTION is the default)
+    _log.info("schema_sync: adding NO ACTION FK on %s.user_id → users.id", table_name)
+    with engine.begin() as conn:
+        conn.execute(text(
+            f"IF NOT EXISTS ("
+            f"  SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_song_reviews_user_id'"
+            f"    AND parent_object_id = OBJECT_ID(N'{table_name}')"
+            f") ALTER TABLE {q} ADD CONSTRAINT [FK_song_reviews_user_id] "
+            f"FOREIGN KEY ([user_id]) REFERENCES [users]([id])"
+        ))
+    _log.info("schema_sync: %s.user_id is now nullable with NO ACTION FK", table_name)
+
+
 def ensure_model_table_columns(engine) -> None:
     for table in (
         User.__table__,
@@ -375,6 +430,7 @@ def ensure_model_table_columns(engine) -> None:
     for fn in (
         _ensure_mssql_emoji_nvarchar,
         _clean_mssql_corrupted_reactions,
+        _ensure_song_reviews_user_id_nullable,
     ):
         try:
             fn(engine)

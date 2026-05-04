@@ -57,10 +57,10 @@ def _build_review_context() -> str:
         rows = (
             db.session.query(
                 SongReview,
-                User.username,
+                User,
                 func.coalesce(like_sq.c.like_count, 0),
             )
-            .join(User, User.id == SongReview.user_id)
+            .outerjoin(User, User.id == SongReview.user_id)
             .outerjoin(like_sq, like_sq.c.song_review_id == SongReview.id)
             .order_by(
                 desc(func.coalesce(like_sq.c.like_count, 0)),
@@ -77,11 +77,12 @@ def _build_review_context() -> str:
         return "No reviews have been posted yet."
 
     lines = []
-    for review, username, likes in rows:
+    for review, user, likes in rows:
+        uname = user.username if user else (review.display_username or "[deleted]")
         stars = "★" * review.rating + "☆" * (5 - review.rating)
         artists = review.artists or ""
         by = f" by {artists}" if artists else ""
-        line = f'- {username} rated "{review.name}"{by} ({review.item_type}) {stars} ({likes} likes)'
+        line = f'- {uname} rated "{review.name}"{by} ({review.item_type}) {stars} ({likes} likes)'
         if review.text:
             snippet = review.text[:120].replace("\n", " ")
             line += f' — "{snippet}"'

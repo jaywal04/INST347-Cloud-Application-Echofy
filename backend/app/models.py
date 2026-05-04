@@ -114,9 +114,11 @@ class SongReview(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
+    # NO ACTION so reviews survive user deletion; app code sets user_id=NULL + display_username="[deleted]"
     user_id = db.Column(
-        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=True, index=True
     )
+    display_username = db.Column(db.String(80), nullable=True)
     item_hash = db.Column(db.String(64), nullable=False, index=True)
     item_key = db.Column(db.String(1024), nullable=False)
     item_type = db.Column(db.String(20), nullable=False, default="track")

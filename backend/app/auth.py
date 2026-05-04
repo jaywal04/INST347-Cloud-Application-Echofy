@@ -447,17 +447,21 @@ def delete_account():
 
     user = db.session.get(User, current_user.id)
     delete_blob_by_url(user.profile_image_url if user else None)
+    # Anonymize reviews: keep them visible but detach from this account
+    SongReview.query.filter_by(user_id=user.id).update(
+        {"display_username": "[deleted]", "user_id": None},
+        synchronize_session=False,
+    )
+    db.session.flush()
+    # Remove all social connections involving this user
     FriendRequest.query.filter(
         or_(FriendRequest.from_user_id == user.id, FriendRequest.to_user_id == user.id)
     ).delete(synchronize_session=False)
     ReviewLike.query.filter_by(user_id=user.id).delete(synchronize_session=False)
     ReviewReaction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
     UserFollow.query.filter_by(followed_id=user.id).delete(synchronize_session=False)
+    # actor_id is NO ACTION — remove notifications this user generated before deleting
     Notification.query.filter_by(actor_id=user.id).delete(synchronize_session=False)
-    # review_id is NO ACTION on MSSQL — clear rows pointing at this user's reviews before CASCADE drops them
-    _review_ids = [r[0] for r in db.session.query(SongReview.id).filter_by(user_id=user.id).all()]
-    if _review_ids:
-        Notification.query.filter(Notification.review_id.in_(_review_ids)).delete(synchronize_session=False)
     db.session.delete(pv)
     logout_user()
     db.session.delete(user)

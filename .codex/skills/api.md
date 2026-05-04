@@ -12,6 +12,7 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 |--------|------|------|-------------|
 | GET | `/api/health` | No | `{ "status": "ok" }` |
 | GET | `/api/config` | No | `{ "backend_url": "<ECHOFY_BACKEND_URL or null>" }` — optional hint for clients |
+| GET | `/api/stats` | No | `{ ok, items_rated, reviews_written, members }` — live community counts for homepage stats strip |
 
 ---
 

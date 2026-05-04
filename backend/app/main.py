@@ -20,7 +20,7 @@ from app.auth import auth_bp
 from app.friends import friends_bp
 from app.database import db, init_db
 from app.envutil import first_non_empty
-from app.models import User
+from app.models import SongReview, User
 from app.reviews import reviews_bp
 from app.telemetry import telemetry_bp
 from app.spotify_client import (
@@ -312,6 +312,16 @@ def create_app() -> Flask:
     @app.get("/api/health")
     def health():
         return jsonify(status="ok")
+
+    @app.get("/api/stats")
+    def api_stats():
+        from sqlalchemy import func, case
+        items_rated = db.session.query(func.count(SongReview.id)).scalar() or 0
+        reviews_written = db.session.query(func.count(SongReview.id)).filter(
+            SongReview.text.isnot(None), SongReview.text != ""
+        ).scalar() or 0
+        members = db.session.query(func.count(User.id)).scalar() or 0
+        return jsonify(ok=True, items_rated=items_rated, reviews_written=reviews_written, members=members)
 
     @app.get("/api/config")
     def api_config():

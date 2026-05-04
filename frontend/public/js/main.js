@@ -115,6 +115,22 @@
     });
   }
 
+  var statsItemsEl   = document.getElementById('stat-items-rated');
+  var statsReviewsEl = document.getElementById('stat-reviews-written');
+  var statsMembersEl = document.getElementById('stat-members');
+  if (statsItemsEl || statsReviewsEl || statsMembersEl) {
+    fetch((API_BASE || '') + '/api/stats')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || !data.ok) return;
+        function fmt(n) { return Number(n).toLocaleString(); }
+        if (statsItemsEl)   statsItemsEl.textContent   = fmt(data.items_rated);
+        if (statsReviewsEl) statsReviewsEl.textContent = fmt(data.reviews_written);
+        if (statsMembersEl) statsMembersEl.textContent = fmt(data.members);
+      })
+      .catch(function () {});
+  }
+
   var reviewsListEl = document.getElementById('recent-reviews-list');
   if (reviewsListEl) {
     fetch((API_BASE || '') + '/api/reviews/recent', { credentials: 'include' })

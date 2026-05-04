@@ -7,12 +7,27 @@
       : String(window.ECHOFY_API_BASE || '').trim().replace(/\/+$/, '');
   }
 
+  /* ── Session storage keys ─────────────────────────────────────────────── */
+  var SK_OPEN     = 'echofy_chat_open';
+  var SK_HISTORY  = 'echofy_chat_history';
+  var SK_MESSAGES = 'echofy_chat_messages';
+  var SK_CHIPS    = 'echofy_chat_chips_hidden';
+
+  function saveState() {
+    try {
+      sessionStorage.setItem(SK_OPEN,     isOpen ? '1' : '0');
+      sessionStorage.setItem(SK_HISTORY,  JSON.stringify(chatHistory));
+      sessionStorage.setItem(SK_MESSAGES, messagesEl.innerHTML);
+      sessionStorage.setItem(SK_CHIPS,    chipsEl.hidden ? '1' : '0');
+    } catch (e) {}
+  }
+
   /* ── Inject panel into the page ──────────────────────────────────────── */
   var panelHtml =
     '<div id="echofy-ai-panel" class="echofy-ai-panel" role="dialog" aria-label="Echo AI" hidden>' +
       '<div class="echofy-ai-inner">' +
         '<div class="echofy-ai-header">' +
-          '<span class="echofy-ai-title">Echo <em>AI</em></span>' +
+          '<span class="echofy-ai-title">Echo</span>' +
           '<button class="echofy-ai-close" id="echofy-ai-close" aria-label="Close Echo AI">' +
             '<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">' +
               '<path d="M18 6 6 18M6 6l12 12"/>' +
@@ -39,13 +54,11 @@
           '<p class="echofy-ai-hint">Uses community review data. Answers may not be accurate.</p>' +
         '</form>' +
       '</div>' +
-    '</div>' +
-    '<div id="echofy-ai-backdrop" class="echofy-ai-backdrop" hidden></div>';
+    '</div>';
 
   document.body.insertAdjacentHTML('beforeend', panelHtml);
 
   var panel      = document.getElementById('echofy-ai-panel');
-  var backdrop   = document.getElementById('echofy-ai-backdrop');
   var closeBtn   = document.getElementById('echofy-ai-close');
   var noticeEl   = document.getElementById('echofy-ai-notice');
   var chipsEl    = document.getElementById('echofy-ai-chips');
@@ -54,61 +67,53 @@
   var inputEl    = document.getElementById('echofy-ai-input');
   var sendBtn    = document.getElementById('echofy-ai-send');
 
-  var chatHistory    = [];
-  var isLoading      = false;
-  var isOpen         = false;
-  var statusChecked  = false;
-  var isConfigured   = false;
+  var chatHistory     = [];
+  var isLoading       = false;
+  var isOpen          = false;
+  var statusChecked   = false;
+  var isConfigured    = false;
   var isAuthenticated = false;
 
   /* ── Panel open / close ───────────────────────────────────────────────── */
+  function navHeight() {
+    var nav = document.querySelector('nav');
+    return nav ? nav.offsetHeight : 0;
+  }
+
   function openPanel() {
+    panel.style.top = navHeight() + 'px';
     panel.hidden = false;
-    backdrop.hidden = false;
     isOpen = true;
     requestAnimationFrame(function () {
       panel.classList.add('is-open');
-      backdrop.classList.add('is-open');
+      document.body.classList.add('echofy-ai-open');
     });
     checkStatus();
+    saveState();
   }
 
   function closePanel() {
     panel.classList.remove('is-open');
-    backdrop.classList.remove('is-open');
+    document.body.classList.remove('echofy-ai-open');
     isOpen = false;
+    saveState();
     setTimeout(function () {
-      if (!isOpen) {
-        panel.hidden = true;
-        backdrop.hidden = true;
-      }
+      if (!isOpen) panel.hidden = true;
     }, 260);
   }
 
   closeBtn.addEventListener('click', closePanel);
-  backdrop.addEventListener('click', closePanel);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && isOpen) closePanel();
   });
 
-  /* ── Wire the nav button (may not exist yet when this runs) ───────────── */
-  function attachNavBtn(btn) {
-    btn.addEventListener('click', function (e) {
+  /* ── Nav button via delegation ────────────────────────────────────────── */
+  document.body.addEventListener('click', function (e) {
+    if (e.target.closest('#echofy-ai-nav-btn')) {
       e.preventDefault();
       isOpen ? closePanel() : openPanel();
-    });
-  }
-
-  var existing = document.getElementById('echofy-ai-nav-btn');
-  if (existing) {
-    attachNavBtn(existing);
-  } else {
-    var observer = new MutationObserver(function () {
-      var btn = document.getElementById('echofy-ai-nav-btn');
-      if (btn) { attachNavBtn(btn); observer.disconnect(); }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
+    }
+  });
 
   /* ── Status / auth check ─────────────────────────────────────────────── */
   function checkStatus() {
@@ -131,21 +136,20 @@
   function applyStatus() {
     noticeEl.hidden = true;
     noticeEl.innerHTML = '';
-    formEl.hidden   = false;
-    chipsEl.hidden  = false;
+    formEl.hidden  = false;
 
     if (!isConfigured) {
       noticeEl.innerHTML = 'Echo AI is not configured on this server yet.';
       noticeEl.hidden = false;
-      formEl.hidden   = true;
-      chipsEl.hidden  = true;
+      formEl.hidden  = true;
+      chipsEl.hidden = true;
       return;
     }
     if (!isAuthenticated) {
       noticeEl.innerHTML = '<a href="/login">Sign in</a> to chat with Echo AI.';
       noticeEl.hidden = false;
-      formEl.hidden   = true;
-      chipsEl.hidden  = true;
+      formEl.hidden  = true;
+      chipsEl.hidden = true;
       return;
     }
     setTimeout(function () { inputEl.focus(); }, 50);
@@ -177,6 +181,7 @@
     row.appendChild(bubble);
     messagesEl.appendChild(row);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    saveState();
     return row;
   }
 
@@ -234,4 +239,34 @@
     var chip = e.target.closest('.echofy-ai-chip');
     if (chip) send(chip.dataset.prompt);
   });
+
+  /* ── Restore state from previous page ───────────────────────────────── */
+  (function restoreState() {
+    try {
+      var savedHistory  = sessionStorage.getItem(SK_HISTORY);
+      var savedMessages = sessionStorage.getItem(SK_MESSAGES);
+      var chipsHidden   = sessionStorage.getItem(SK_CHIPS) === '1';
+      var wasOpen       = sessionStorage.getItem(SK_OPEN) === '1';
+
+      if (savedHistory)  chatHistory = JSON.parse(savedHistory);
+      if (savedMessages) messagesEl.innerHTML = savedMessages;
+      if (chipsHidden)   chipsEl.hidden = true;
+
+      if (wasOpen) {
+        panel.style.transition = 'none';
+        document.body.style.transition = 'none';
+        panel.style.top = navHeight() + 'px';
+        panel.hidden = false;
+        isOpen = true;
+        panel.classList.add('is-open');
+        document.body.classList.add('echofy-ai-open');
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        requestAnimationFrame(function () {
+          panel.style.transition = '';
+          document.body.style.transition = '';
+        });
+        checkStatus();
+      }
+    } catch (e) {}
+  })();
 })();

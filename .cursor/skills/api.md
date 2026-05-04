@@ -56,7 +56,7 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/users/<int:user_id>/profile` | Yes | Public profile view (respects privacy) |
+| GET | `/api/users/<int:user_id>/profile` | Yes | Public profile view (respects privacy); response includes `follower_count` and `friend_count` |
 | GET | `/api/users/search` | Yes | Search users (excludes pending/accepted connections); each result includes `is_following` bool |
 | GET | `/api/friends` | Yes | Friends list |
 | GET | `/api/notifications/count` | Yes | Badge count = pending friend requests + unread Notification rows |

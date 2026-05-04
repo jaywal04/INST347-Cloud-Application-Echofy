@@ -4,7 +4,7 @@
 
 ## What it is
 
-Echofy is a static web app plus a Python API: music discovery (Spotify), song reviews, user profiles, friends, and notifications. Users sign up with email verification, log in via Flask sessions, and optionally connect Spotify for personalized charts and search.
+Echofy is a static web app plus a Python API: music discovery (Spotify), song reviews, user profiles, friends, notifications, and an AI chat assistant (Echo). Users sign up with email verification, log in via Flask sessions, and optionally connect Spotify for personalized charts and search. The Echo AI side panel (available on every page via the navbar) lets users ask questions about community reviews; it is powered by Azure AI Foundry (GPT-4o) and uses top community reviews as RAG context.
 
 ## Tech stack
 

@@ -160,8 +160,8 @@
         '</svg>';
 
       authDiv.innerHTML = '';
-      authDiv.appendChild(bellLink);
       authDiv.appendChild(aiBtn);
+      authDiv.appendChild(bellLink);
       authDiv.appendChild(profileLink);
 
       var heroSignup = document.getElementById('hero-signup-link');

@@ -60,10 +60,22 @@ def public_profile(user_id: int):
     if not user or not user.profile_public:
         return jsonify(ok=False, errors=["User not found or profile is private."]), 404
 
+    follower_count = UserFollow.query.filter_by(followed_id=user.id).count()
+
+    friend_count = FriendRequest.query.filter(
+        FriendRequest.status == "accepted",
+        or_(
+            FriendRequest.from_user_id == user.id,
+            FriendRequest.to_user_id == user.id,
+        ),
+    ).count()
+
     profile = {
         "id": user.id,
         "username": user.username,
         "profile_image_url": signed_profile_image_url(user.profile_image_url),
+        "follower_count": follower_count,
+        "friend_count": friend_count,
     }
 
     if user.show_bio:

@@ -4,13 +4,17 @@
   var API_BASE = window.ECHOFY_API_BASE || '';
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
 
+  var myUserId = null;
+
   if (API_BASE) {
     fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data || !data.authenticated) {
           window.location.href = '/login';
+          return;
         }
+        myUserId = data.user && data.user.id;
       })
       .catch(function () { window.location.href = '/login'; });
   }
@@ -209,6 +213,20 @@
     });
   }
 
+  function updateMyStats(friendCount, followingCount) {
+    if (!myUserId) return;
+    fetch(API_BASE + '/api/users/' + myUserId + '/profile', Object.assign({}, fetchOpts, { method: 'GET' }))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.ok) return;
+        document.getElementById('my-follower-count').textContent = data.profile.follower_count || 0;
+        document.getElementById('my-friend-count').textContent = friendCount;
+        document.getElementById('my-following-count').textContent = followingCount;
+        document.getElementById('friends-my-stats').hidden = false;
+      })
+      .catch(function () {});
+  }
+
   function refreshAll() {
     Promise.all([loadFriends(), loadIncoming(), loadOutgoing(), loadFollowing()]).then(function (results) {
       if (!results[0]) return;
@@ -216,6 +234,9 @@
       renderIncoming(results[1] || { ok: true, requests: [] });
       renderOutgoing(results[2] || { ok: true, requests: [] });
       renderFollowing(results[3] || { ok: true, following: [] });
+      var friendCount = (results[0].friends || []).length;
+      var followingCount = (results[3] && results[3].following ? results[3].following.length : 0);
+      updateMyStats(friendCount, followingCount);
     });
   }
 

@@ -29,7 +29,7 @@ Pages listed in `scripts/render_static_html.py` (`PAGES`) are rebuilt by the ren
 | `user.html` | user | `user-profile.js` |
 | `posts.html` | *(not in render script — managed separately)* | `posts.js` — logged-in **My posts**: `GET /api/reviews`, edit via `POST /api/reviews`, delete via `DELETE /api/reviews/<id>` |
 
-Shared utilities include `navbar.js`, `apiBase.js`, `pathContext.js`, `bugReport.js`, and `chat.js` as referenced by layout/footers. `chat.js` is loaded on **every page** via `layout-top.html` (deferred); it injects the Echo AI side panel into the DOM and wires the `#echofy-ai-nav-btn` button added by `navbar.js` (authenticated users only). Checks `GET /api/chat/status` and `GET /api/auth/me` on first open; supports multi-turn conversation via `POST /api/chat`.
+Shared utilities include `navbar.js`, `apiBase.js`, `pathContext.js`, `bugReport.js`, and `chat.js` as referenced by layout/footers. `chat.js` is loaded on **every page** via `layout-top.html` (deferred); it injects the **Echo AI side panel** into the DOM and wires the `#echofy-ai-nav-btn` sparkle button added by `navbar.js` (authenticated users only). Checks `GET /api/chat/status` and `GET /api/auth/me` on first open; supports multi-turn conversation via `POST /api/chat`. The panel slides in from the right and pushes page content via `body.echofy-ai-open { padding-right: 360px }` (≥480 px screens); the navbar stays static. Panel state (open/closed, chat history, message HTML, chips visibility) is persisted in `sessionStorage` so the panel survives page navigation. On restore the CSS transition is temporarily suppressed (`transition: none`) so the panel appears instantly; the animation only plays on user-triggered open/close.
 
 ## API base URL (`js/apiBase.js`)
 

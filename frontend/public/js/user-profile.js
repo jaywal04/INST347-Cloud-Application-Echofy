@@ -54,9 +54,13 @@
         avatarEl.textContent = p.username.substring(0, 2).toUpperCase();
       }
 
-      // Username
+      // Username + stats
       usernameEl.textContent = p.username;
       document.title = p.username + ' — Echofy';
+
+      document.getElementById('user-follower-count').textContent = p.follower_count || 0;
+      document.getElementById('user-friend-count').textContent = p.friend_count || 0;
+      document.getElementById('user-stats').hidden = false;
 
       // Bio
       if (p.bio) {

@@ -500,7 +500,10 @@ def force_fix_emoji_column():
 def main():
     with app.app_context():
         print("\n  Connected to:", app.config["SQLALCHEMY_DATABASE_URI"][:80] + "...")
-        ensure_model_table_columns(db.engine)
+        try:
+            ensure_model_table_columns(db.engine)
+        except Exception as _e:
+            print(f"  [warn] schema_sync failed (non-fatal): {_e}")
 
         while True:
             print(MENU)

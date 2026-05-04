@@ -413,21 +413,19 @@ def _ensure_song_reviews_user_id_nullable(engine) -> None:
 
 
 def ensure_model_table_columns(engine) -> None:
-    for table in (
-        User.__table__,
-        PendingVerification.__table__,
-        FriendRequest.__table__,
-        SongReview.__table__,
-        ReviewLike.__table__,
-        ReviewReaction.__table__,
-        UserFollow.__table__,
-        Notification.__table__,
-    ):
-        _ensure_table_columns(engine, table)
-    ensure_review_likes_one_per_user(engine)
-    ensure_review_reactions_one_per_user_emoji(engine)
-    # Emoji charset fixes — each isolated so one failure can't block the others
     for fn in (
+        lambda e: [_ensure_table_columns(e, t) for t in (
+            User.__table__,
+            PendingVerification.__table__,
+            FriendRequest.__table__,
+            SongReview.__table__,
+            ReviewLike.__table__,
+            ReviewReaction.__table__,
+            UserFollow.__table__,
+            Notification.__table__,
+        )],
+        ensure_review_likes_one_per_user,
+        ensure_review_reactions_one_per_user_emoji,
         _ensure_mssql_emoji_nvarchar,
         _clean_mssql_corrupted_reactions,
         _ensure_song_reviews_user_id_nullable,
@@ -435,4 +433,4 @@ def ensure_model_table_columns(engine) -> None:
         try:
             fn(engine)
         except Exception as exc:
-            _log.warning("schema_sync: %s failed (non-fatal): %s", fn.__name__, exc)
+            _log.warning("schema_sync: %s failed (non-fatal): %s", getattr(fn, "__name__", fn), exc)

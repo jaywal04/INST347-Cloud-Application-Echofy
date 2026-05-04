@@ -2538,4 +2538,15 @@ button.reviews-spotify-pick.spotify-track:hover {
   text-align: center;
   margin: 0;
 }
+
+/* Markdown rendering inside assistant bubbles */
+.echofy-ai-md { white-space: normal; }
+.echofy-ai-md p { margin: 0 0 0.5em; }
+.echofy-ai-md p:last-child { margin-bottom: 0; }
+.echofy-ai-md ul, .echofy-ai-md ol { margin: 0.3em 0 0.5em 1.2em; padding: 0; }
+.echofy-ai-md li { margin-bottom: 0.2em; }
+.echofy-ai-md strong { font-weight: 600; }
+.echofy-ai-md em { font-style: italic; }
+.echofy-ai-md code { font-family: monospace; font-size: 0.85em; background: rgba(255,255,255,0.1); padding: 0.1em 0.3em; border-radius: 3px; }
+.echofy-ai-md h1, .echofy-ai-md h2, .echofy-ai-md h3 { font-size: 1em; font-weight: 600; margin: 0.5em 0 0.25em; }
 .notif-review-link:hover { text-decoration: underline; }

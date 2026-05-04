@@ -168,7 +168,12 @@
     row.className = 'echofy-ai-msg echofy-ai-msg-' + role;
     var bubble = document.createElement('div');
     bubble.className = 'echofy-ai-bubble';
-    bubble.textContent = text;
+    if (role === 'assistant' && typeof marked !== 'undefined') {
+      bubble.classList.add('echofy-ai-md');
+      bubble.innerHTML = marked.parse(text);
+    } else {
+      bubble.textContent = text;
+    }
     row.appendChild(bubble);
     messagesEl.appendChild(row);
     messagesEl.scrollTop = messagesEl.scrollHeight;

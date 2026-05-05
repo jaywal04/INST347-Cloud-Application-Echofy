@@ -595,20 +595,26 @@
 
     fetch(topUrl, fetchOpts)
       .then(function (res) {
-        return res.json().then(function (data) {
-          return { ok: res.ok, status: res.status, data: data };
+        var status = res.status;
+        return res.text().then(function (raw) {
+          var data;
+          try { data = JSON.parse(raw); } catch (_) { data = null; }
+          return { ok: res.ok, status: status, data: data, raw: data ? null : raw };
         });
       })
       .then(function (_ref) {
         var ok = _ref.ok;
         var data = _ref.data;
 
-        console.log('[Echofy] Spotify /api/spotify/top-tracks', {
-          httpStatus: _ref.status,
-          ok: ok,
-          payload: data,
-          trackCount: data && data.tracks ? data.tracks.length : 0,
-        });
+        if (!data) {
+          reportDiscover('discover.top_tracks', null, {
+            endpoint: '/api/spotify/top-tracks',
+            errorMessage: 'non_json_response',
+            httpStatus: _ref.status,
+          });
+          statusEl.textContent = MSG_TRY_AGAIN;
+          return;
+        }
 
         if (!ok) {
           statusEl.textContent = apiErrorText(
@@ -631,8 +637,11 @@
         refreshSaveButtons();
       })
       .catch(function (err) {
-        console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
-        reportDiscover('discover.top_tracks', err, { endpoint: '/api/spotify/top-tracks' });
+        var etype = err instanceof TypeError ? 'network_error' : 'fetch_error';
+        reportDiscover('discover.top_tracks', null, {
+          endpoint: '/api/spotify/top-tracks',
+          errorMessage: etype,
+        });
         statusEl.textContent = MSG_TRY_AGAIN;
       })
       .finally(function () {

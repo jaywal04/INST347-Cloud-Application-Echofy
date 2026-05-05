@@ -357,6 +357,33 @@ def _clean_mssql_corrupted_reactions(engine) -> None:
         ))
 
 
+def _ensure_spotify_token_columns_wide(engine) -> None:
+    """Widen spotify_access_token / spotify_refresh_token from NVARCHAR(512) to NVARCHAR(2048).
+
+    Newer Spotify JWT access tokens can exceed 512 chars; truncation causes a DB error
+    during the OAuth callback and leaves users stuck in a broken state.
+    """
+    if engine.dialect.name != "mssql":
+        return
+    table_name = User.__tablename__
+    insp = inspect(engine)
+    if not insp.has_table(table_name):
+        return
+    q = _quote_table_mssql(table_name)
+    for col_name in ("spotify_access_token", "spotify_refresh_token"):
+        for col in insp.get_columns(table_name):
+            if col["name"].lower() == col_name:
+                length = getattr(col["type"], "length", None)
+                if length and length >= 2048:
+                    break
+                _log.info("schema_sync: widening %s.%s to NVARCHAR(2048)", table_name, col_name)
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE {q} ALTER COLUMN [{col_name}] NVARCHAR(2048) NULL"
+                    ))
+                break
+
+
 def _ensure_song_reviews_user_id_nullable(engine) -> None:
     """Make song_reviews.user_id nullable so deleted-user reviews can persist with user_id=NULL.
 
@@ -429,6 +456,7 @@ def ensure_model_table_columns(engine) -> None:
         _ensure_mssql_emoji_nvarchar,
         _clean_mssql_corrupted_reactions,
         _ensure_song_reviews_user_id_nullable,
+        _ensure_spotify_token_columns_wide,
     ):
         try:
             fn(engine)

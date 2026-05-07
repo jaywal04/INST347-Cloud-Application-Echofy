@@ -2,10 +2,17 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
+  var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   var listEl = document.getElementById('posts-list');
   var emptyEl = document.getElementById('posts-empty');
   var statusEl = document.getElementById('posts-status');
   var ctaDiscover = document.getElementById('posts-cta-discover');
+
+  function route(path) {
+    var raw = String(path || '').trim();
+    if (!isLocal || !raw || raw === '#' || /^https?:\/\//.test(raw)) return raw;
+    return raw.slice(-5) === '.html' ? raw : raw + '.html';
+  }
 
   function apiBase() {
     return typeof window.echofyApiBaseUrl === 'function'
@@ -247,7 +254,7 @@
     fetch(base + '/api/reviews', { credentials: 'include' })
       .then(function (res) {
         if (res.status === 401) {
-          window.location.href = '/login';
+          window.location.href = route('login');
           return null;
         }
         return res.json();
@@ -273,6 +280,18 @@
         setStatus('Network error. Try again.', true);
       });
   }
+
+  fetch(apiBase() + '/api/auth/me', { credentials: 'include' })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.authenticated && data.user && data.user.username) {
+        var target = '/' + encodeURIComponent(data.user.username) + '/posts';
+        if (window.location.pathname !== target) {
+          history.replaceState(null, '', target + window.location.search);
+        }
+      }
+    })
+    .catch(function () {});
 
   load();
 })();

@@ -24,6 +24,8 @@ _USER_PAGE_HTML = {
     "profile": "profile.html",
     "notifications": "notifications.html",
     "user": "user.html",
+    "echo": "echo.html",
+    "messages": "messages.html",
 }
 _STATIC_FIRST_SEGMENTS = frozenset({"css", "js", "assets", "fonts"})
 

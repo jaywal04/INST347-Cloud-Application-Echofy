@@ -12,6 +12,8 @@
     profile: 1,
     notifications: 1,
     user: 1,
+    echo: 1,
+    messages: 1,
   };
 
   window.ECHOFY_PATH_USERNAME = '';
@@ -24,7 +26,7 @@
     try {
       var u = new URL(stashed, window.location.origin);
       if (
-        /^\/[^/]+\/(discovery|dashboard|discover|review|posts|friends|profile|notifications|user)(?:\/|$)/.test(
+        /^\/[^/]+\/(discovery|dashboard|discover|review|posts|friends|profile|notifications|user|echo|messages)(?:\/|$)/.test(
           u.pathname
         )
       ) {

@@ -22,7 +22,9 @@
 4. **Database** — `init_db(app)` from `app.database`.
 5. **Flask-Login** — `LoginManager`, `user_loader` → `User.query.get`, unauthorized JSON `401`.
 6. **Blueprints** (registration order): `telemetry_bp`, `auth_bp`, `friends_bp`, `reviews_bp`.
-7. **Error handlers** — `OperationalError` / `DBAPIError` → JSON 503 “temporarily unavailable”.
+7. **Error handlers** —
+   - `OperationalError` / `DBAPIError` → JSON 503 “temporarily unavailable”.
+   - `HTTPException` preserves HTTP semantics for API requests (for example missing API routes return JSON 404 instead of being converted to 500).
 8. **Routes** — health, config, all `/api/spotify/*`, OAuth `/auth/spotify` and `/callback` (see `api.md`).
 9. **Discord** — optional non-blocking startup embed (`_schedule_discord_startup_notification`).
 

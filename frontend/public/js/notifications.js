@@ -2,6 +2,7 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
+  var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
   var MSG_NET =
     'Something went wrong. The team has been notified. Please try again shortly.';
@@ -11,6 +12,12 @@
   var activityListEl = document.getElementById('notif-activity');
   var activityEmptyEl = document.getElementById('notif-activity-empty');
   if (!requestListEl) return;
+
+  function route(path) {
+    var raw = String(path || '').trim();
+    if (!isLocal || !raw || raw === '#' || /^https?:\/\//.test(raw)) return raw;
+    return raw.slice(-5) === '.html' ? raw : raw + '.html';
+  }
 
   function escapeHtml(s) {
     var d = document.createElement('div');
@@ -30,7 +37,7 @@
   function loadRequests() {
     return fetch(API_BASE + '/api/friends/requests/incoming', Object.assign({}, fetchOpts, { method: 'GET' }))
       .then(function (res) {
-        if (res.status === 401) { window.location.href = '/login'; return null; }
+        if (res.status === 401) { window.location.href = route('login'); return null; }
         return res.json();
       });
   }
@@ -135,6 +142,18 @@
         if (data.ok) load();
       });
   });
+
+  fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data && data.authenticated && data.user && data.user.username) {
+        var target = '/' + encodeURIComponent(data.user.username) + '/notifications';
+        if (window.location.pathname !== target) {
+          history.replaceState(null, '', target + window.location.search);
+        }
+      }
+    })
+    .catch(function () {});
 
   load();
 })();

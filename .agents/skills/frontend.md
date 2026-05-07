@@ -42,13 +42,15 @@ All authenticated API calls should use `credentials: 'include'` so the Flask ses
 
 ## Username-prefixed paths (`js/pathContext.js`)
 
-URLs like `/{username}/discover`, `/{username}/posts`, `/{username}/friends`, etc. set:
+URLs like `/{username}/discover`, `/{username}/posts`, `/{username}/friends`, `/{username}/echo`, and `/{username}/messages` set:
 
 - `window.ECHOFY_PATH_USERNAME`
 - `window.ECHOFY_USER_BASE`
 - `window.echofyUserPath(segment)` for links
 
 The script fetches `/api/auth/me` and redirects to `/login` if unauthenticated, or if the logged-in user’s username does not match the path prefix. First path segment must not be reserved (`css`, `js`, `login`, `api`, …).
+
+Local clean-URL handling in `frontend/server.py` supports the same prefixed pages and rewrites them to static files (`discover.html`, `review.html`, `posts.html`, `friends.html`, `profile.html`, `notifications.html`, `user.html`, `echo.html`, `messages.html`).
 
 ## Static Web Apps (`frontend/public/staticwebapp.config.json`)
 

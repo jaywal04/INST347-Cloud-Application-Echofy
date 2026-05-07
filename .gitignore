@@ -26,3 +26,5 @@ frontend/public/echofy-config.json
 
 # Editor/temp backup files
 .~*
+
+backup

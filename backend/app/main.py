@@ -14,6 +14,7 @@ from flask import Flask, has_request_context, jsonify, redirect, request, sessio
 from flask_cors import CORS
 from flask_login import LoginManager, current_user
 from sqlalchemy.exc import DBAPIError, OperationalError
+from werkzeug.exceptions import HTTPException
 
 from app.ai_chat import ai_chat_bp
 from app.auth import auth_bp
@@ -308,6 +309,14 @@ def create_app() -> Flask:
     def handle_db_error(error):
         app.logger.error("Database connection error: %s", error)
         return jsonify(ok=False, errors=["Database is temporarily unavailable. Please try again in a moment."]), 503
+
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(error: HTTPException):
+        # Preserve HTTP status semantics (e.g. missing routes should remain 404, not 500).
+        if request.path.startswith("/api/"):
+            message = error.description or error.name or "Request failed."
+            return jsonify(ok=False, errors=[message]), error.code or 500
+        return error
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):

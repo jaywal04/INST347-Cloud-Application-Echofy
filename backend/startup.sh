@@ -10,13 +10,24 @@ if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then
     ACCEPT_EULA=Y apt-get install -y msodbcsql18
 fi
 
-APP_ROOT="/home/site/wwwroot"
-PACKAGES_PATH="$APP_ROOT/.python_packages/lib/site-packages"
 LOG_FILE="/home/LogFiles/echofy-startup.log"
-
 mkdir -p /home/LogFiles
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] starting gunicorn on PORT=${PORT:-unset}" >> "$LOG_FILE"
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] wwwroot: $(ls $APP_ROOT 2>&1)" >> "$LOG_FILE"
+
+# Locate app/ — GitHub Actions deploys it to wwwroot directly;
+# Oryx/full-repo deployments put it under wwwroot/backend/.
+WWWROOT="/home/site/wwwroot"
+if [ -d "$WWWROOT/app" ]; then
+  APP_ROOT="$WWWROOT"
+elif [ -d "$WWWROOT/backend/app" ]; then
+  APP_ROOT="$WWWROOT/backend"
+else
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ERROR: cannot find app/ under $WWWROOT" >> "$LOG_FILE"
+  exit 1
+fi
+
+PACKAGES_PATH="$APP_ROOT/.python_packages/lib/site-packages"
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] starting gunicorn on PORT=${PORT:-unset}, APP_ROOT=$APP_ROOT" >> "$LOG_FILE"
 
 export PYTHONPATH="$APP_ROOT:$PACKAGES_PATH"
 cd "$APP_ROOT"

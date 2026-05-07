@@ -14,6 +14,7 @@ from flask import Flask, has_request_context, jsonify, redirect, request, sessio
 from flask_cors import CORS
 from flask_login import LoginManager, current_user
 from sqlalchemy.exc import DBAPIError, OperationalError
+from werkzeug.exceptions import HTTPException
 
 from app.ai_chat import ai_chat_bp
 from app.auth import auth_bp
@@ -313,6 +314,8 @@ def create_app() -> Flask:
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
+        if isinstance(error, HTTPException):
+            return jsonify(ok=False, errors=[error.description]), error.code
         app.logger.exception("Unhandled exception: %s", error)
         return jsonify(ok=False, errors=["An unexpected error occurred. Please try again."]), 500
 

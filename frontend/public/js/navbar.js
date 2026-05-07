@@ -68,6 +68,8 @@
       { href: base + '/review', text: 'Reviews', active: activeSeg === 'review' },
       { href: base + '/posts', text: 'My posts', active: activeSeg === 'posts' },
       { href: base + '/friends', text: 'Friends', active: activeSeg === 'friends' },
+      { href: base + '/echo', text: 'My Echo', active: activeSeg === 'echo' },
+      { href: base + '/messages', text: 'Messages', active: activeSeg === 'messages' },
     ]);
   }
 
@@ -191,6 +193,20 @@
             badge.textContent = d.count > 99 ? '99+' : d.count;
             bellLink.appendChild(badge);
           }
+        })
+        .catch(function () {});
+
+      fetch(apiBase() + '/api/messages/unread-count', { credentials: 'include' })
+        .then(function (res) { return res.json(); })
+        .then(function (d) {
+          if (!d || !d.ok || !d.count) return;
+          var msgLink = ul.querySelector('a[href$="/messages"]');
+          if (!msgLink) return;
+          var badge = document.createElement('span');
+          badge.id = 'nav-messages-badge';
+          badge.className = 'nav-notif-badge';
+          badge.textContent = d.count > 99 ? '99+' : String(d.count);
+          msgLink.appendChild(badge);
         })
         .catch(function () {});
     })

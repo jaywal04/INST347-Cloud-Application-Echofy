@@ -278,12 +278,28 @@ def _resolve_spotify_token(
     client_secret: str = "",
     legacy_user_token: str = "",
     oauth_access_token: str = "",
+    prefer_client: bool = False,
 ) -> tuple[str | None, str | None, tuple[dict[str, Any], int] | None]:
-    token = (oauth_access_token or legacy_user_token or "").strip()
-    if token:
-        return token, "user", None
-
     cid, csec = client_id.strip(), client_secret.strip()
+    user_token = (oauth_access_token or legacy_user_token or "").strip()
+
+    if prefer_client and cid and csec:
+        token, err = _get_client_credentials_token(cid, csec)
+        if token:
+            return token, "client", None
+        if user_token:
+            return user_token, "user", None
+        return None, None, (
+            {
+                "error": "token_error",
+                "message": err or "Could not obtain Spotify access token.",
+            },
+            502,
+        )
+
+    if user_token:
+        return user_token, "user", None
+
     if cid and csec:
         token, err = _get_client_credentials_token(cid, csec)
         if token:
@@ -721,6 +737,7 @@ def search_spotify_for_response(
         client_secret=client_secret,
         legacy_user_token=legacy_user_token,
         oauth_access_token=oauth_access_token,
+        prefer_client=True,
     )
     if token_error:
         return token_error
@@ -811,6 +828,7 @@ def recommend_tracks_for_genre_response(
         client_secret=client_secret,
         legacy_user_token=legacy_user_token,
         oauth_access_token=oauth_access_token,
+        prefer_client=True,
     )
     if token_error:
         return token_error
@@ -957,6 +975,7 @@ def recommend_similar_for_item_response(
         client_secret=client_secret,
         legacy_user_token=legacy_user_token,
         oauth_access_token=oauth_access_token,
+        prefer_client=True,
     )
     if token_error:
         return token_error

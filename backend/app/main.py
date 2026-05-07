@@ -19,6 +19,7 @@ from app.models import User
 from app.reviews import reviews_bp
 from app.spotify_client import (
     SPOTIFY_TOKEN_URL,
+    fetch_curated_chart_for_response,
     fetch_top_tracks_for_response,
     recommend_similar_for_item_response,
     recommend_tracks_for_genre_response,
@@ -156,7 +157,18 @@ def create_app() -> Flask:
 
     @app.get("/api/spotify/top-tracks")
     def spotify_top_tracks():
+        view = (request.args.get("view") or "").strip().lower().replace("-", "_")
         oauth_tok = session.get("spotify_access_token") or ""
+        if view and view not in ("auto", "personal", "default", ""):
+            payload, status = fetch_curated_chart_for_response(
+                view,
+                client_id=_spotify_client_id(),
+                client_secret=_spotify_client_secret(),
+                legacy_user_token=_spotify_legacy_user_token(),
+                oauth_access_token=oauth_tok,
+            )
+            return jsonify(payload), status
+
         payload, status = fetch_top_tracks_for_response(
             client_id=_spotify_client_id(),
             client_secret=_spotify_client_secret(),

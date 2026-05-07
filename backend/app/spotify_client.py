@@ -12,8 +12,18 @@ from app.envutil import first_non_empty
 
 SPOTIFY_API = "https://api.spotify.com/v1"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
-# Official Spotify chart playlist (Top 50 — Global); public, works with client credentials.
+# Official Spotify chart playlists; public and intended for chart-style discovery.
 GLOBAL_TOP_50_PLAYLIST = "37i9dQZEVXbMDoHDwVN2tF"
+USA_TOP_50_PLAYLIST = "37i9dQZEVXbLRQDuF5jeBp"
+VIRAL_50_GLOBAL_PLAYLIST = "37i9dQZEVXbLiRSasKsNU9"
+VIRAL_50_USA_PLAYLIST = "37i9dQZEVXbKuaTI1Z1Afx"
+
+CHART_PLAYLIST_VIEWS: dict[str, tuple[str, str]] = {
+    "global": (GLOBAL_TOP_50_PLAYLIST, "global_top_50"),
+    "usa": (USA_TOP_50_PLAYLIST, "usa_top_50"),
+    "viral_global": (VIRAL_50_GLOBAL_PLAYLIST, "viral_50_global"),
+    "viral_usa": (VIRAL_50_USA_PLAYLIST, "viral_50_usa"),
+}
 
 _REFRESH_MARGIN_SEC = 60
 _REQUEST_TIMEOUT = 20
@@ -368,6 +378,155 @@ def _get_client_credentials_token(client_id: str, client_secret: str) -> tuple[s
         _cc_client_key = key
 
         return token, ""
+
+
+def _playlist_tracks_market_fallback(
+    access_token: str, playlist_id: str
+) -> tuple[list[dict[str, Any]] | None, str]:
+    """Try playlist tracks with the configured market, then without one."""
+    last_detail = ""
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
+    market_attempts: list[str | None] = []
+    if market:
+        market_attempts.append(market)
+    market_attempts.append(None)
+    for current_market in market_attempts:
+        tracks, err = _playlist_tracks_payload(
+            access_token, playlist_id, market=current_market
+        )
+        if tracks:
+            return tracks, ""
+        if err:
+            last_detail = err
+    return None, last_detail
+
+
+def _new_releases_tracks(
+    access_token: str,
+) -> tuple[list[dict[str, Any]] | None, str]:
+    res = requests.get(
+        f"{SPOTIFY_API}/browse/new-releases",
+        headers=_headers(access_token),
+        params={"limit": 20},
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if res.status_code != 200:
+        try:
+            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
+        except Exception:
+            detail = res.text[:200]
+        return None, detail or f"HTTP {res.status_code}"
+
+    tracks: list[dict[str, Any]] = []
+    for album in (res.json().get("albums") or {}).get("items") or []:
+        row = _normalize_new_release_album(album)
+        if row:
+            tracks.append(row)
+    if tracks:
+        return tracks, ""
+    return None, "new releases response had no albums"
+
+
+def fetch_curated_chart_for_response(
+    chart_view: str,
+    client_id: str = "",
+    client_secret: str = "",
+    legacy_user_token: str = "",
+    oauth_access_token: str = "",
+) -> tuple[dict[str, Any], int]:
+    """Load a specific Spotify chart or new releases feed for Discover."""
+    key = (chart_view or "").strip().lower().replace("-", "_")
+    cid, csec = client_id.strip(), client_secret.strip()
+
+    def _fallback_payload(reason: str) -> tuple[dict[str, Any], int]:
+        fallback_payload, fallback_status = fetch_public_chart(token)
+        if fallback_status == 200:
+            fallback_payload["chart_view"] = key
+            fallback_payload["spotify_session_note"] = reason
+        return fallback_payload, fallback_status
+
+    def _token_for_charts() -> tuple[str | None, tuple[dict[str, Any], int] | None]:
+        if cid and csec:
+            tok, err = _get_client_credentials_token(cid, csec)
+            if tok:
+                return tok, None
+            return None, (
+                {
+                    "error": "token_error",
+                    "message": err or "Could not obtain Spotify access token.",
+                },
+                502,
+            )
+
+        user = (oauth_access_token or legacy_user_token or "").strip()
+        if not user:
+            return None, (
+                {
+                    "error": "missing_credentials",
+                    "message": (
+                        "Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET for chart playlists, "
+                        "or connect Spotify / set SPOTIFY_TOKEN."
+                    ),
+                },
+                503,
+            )
+        return user, None
+
+    token, err_tup = _token_for_charts()
+    if err_tup:
+        return err_tup
+    assert token
+
+    if key == "new_releases":
+        tracks, detail = _new_releases_tracks(token)
+        if tracks:
+            return (
+                {
+                    "source": "new_releases",
+                    "tracks": tracks,
+                    "chart_view": key,
+                    "spotify_session_note": "Spotify new releases in your browse market.",
+                },
+                200,
+            )
+        return _fallback_payload(
+            "Spotify blocked the requested new-releases feed for this session. Showing an available Spotify chart instead."
+        )
+
+    playlist_info = CHART_PLAYLIST_VIEWS.get(key)
+    if not playlist_info:
+        allowed = ", ".join(sorted(set(CHART_PLAYLIST_VIEWS) | {"new_releases"}))
+        return (
+            {
+                "error": "invalid_view",
+                "message": f"Unknown chart view. Allowed: auto (omit), {allowed}.",
+            },
+            400,
+        )
+
+    playlist_id, source_key = playlist_info
+    tracks, last_err = _playlist_tracks_market_fallback(token, playlist_id)
+    if tracks:
+        notes = {
+            "global_top_50": "Spotify's Global Top 50 (daily chart).",
+            "usa_top_50": "Spotify's Top 50 - USA.",
+            "viral_50_global": "Spotify's Viral 50 - Global.",
+            "viral_50_usa": "Spotify's Viral 50 - USA.",
+        }
+        return (
+            {
+                "source": source_key,
+                "tracks": tracks,
+                "chart_view": key,
+                "spotify_session_note": notes.get(source_key, ""),
+            },
+            200,
+        )
+
+    reason = "Spotify blocked that requested chart for this session. Showing an available Spotify chart instead."
+    if last_err:
+        reason = f"{reason} ({last_err})"
+    return _fallback_payload(reason)
 
 
 def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:

@@ -102,6 +102,17 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 
 ---
 
+## Direct messages (`messages.py`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/messages/threads` | Yes | All friend threads sorted by latest message; each thread includes `friend` (id, username, profile_image_url), `latest_at`, `latest_message`, `latest_shared_item`, `unread_count` |
+| GET | `/api/messages/conversations/<int:friend_id>` | Yes | Fetch conversation with a friend (must be accepted friends); marks incoming unread messages as read; returns `friend` and `messages` array |
+| POST | `/api/messages/conversations/<int:friend_id>` | Yes | Send a message; JSON `{ "text": str, "shared_item": obj? }`; at least one of `text` or `shared_item` required |
+| GET | `/api/messages/unread-count` | Yes | Total unread incoming messages across all conversations |
+
+---
+
 ## Telemetry (`telemetry.py` — prefix `/api/telemetry`)
 
 | Method | Path | Auth | Description |

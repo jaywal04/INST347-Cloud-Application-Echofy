@@ -8,13 +8,11 @@
   - `layout-top.html` — opening through `<body>`; must contain `{{PAGE_TITLE}}`.
   - `frontend/snippets/bodies/<page>.html` — main content per page.
   - `frontend/snippets/footers/<page>.html` — closing markup before deferred scripts.
-- **Built output:** `frontend/public/*.html` is produced by `scripts/render_static_html.py` (see `PAGES` list in that script).
-
-Do not hand-edit `public/*.html` for structural changes without updating snippets and re-running the render script.
+- **Built output:** `frontend/public/*.html` is produced by `scripts/render_static_html.py` (see `PAGES` list in that script). `echo.html` and `messages.html` are not in `PAGES` — edit them directly in `public/`.
 
 ## Pages and scripts (from render script)
 
-Pages listed in `scripts/render_static_html.py` (`PAGES`) are rebuilt by the render script. `posts.html` exists in `frontend/public/` but is **not** in `PAGES` — it is managed separately and must not be hand-edited through snippets.
+Pages listed in `scripts/render_static_html.py` (`PAGES`) are rebuilt by the render script and committed to `frontend/public/`. Do not hand-edit those files for structural changes — edit the snippet and re-run the render script. `echo.html` and `messages.html` are **static files managed separately** (not in `PAGES`) and are hand-edited directly in `frontend/public/`.
 
 | Output | Body / footer stems | Deferred JS |
 |--------|---------------------|-------------|
@@ -23,11 +21,13 @@ Pages listed in `scripts/render_static_html.py` (`PAGES`) are rebuilt by the ren
 | `signup.html` | signup | `auth.js` |
 | `discover.html` | discover | `discover.js` — on load calls `GET /api/spotify/top-tracks` (optional `?view=` from **Chart source**); changing the menu or **Refresh charts** refetches |
 | `review.html` | review | `reviews-browse.js` — `GET /api/reviews/browse` (sort/category + optional text `q`); **Search Spotify** → `GET /api/spotify/search` then pick a track → `POST /api/reviews/for-item`; emoji reactions via `POST/DELETE /api/reviews/<id>/reactions` |
+| `posts.html` | posts | `posts.js` — logged-in **My posts**: `GET /api/reviews`, edit via `POST /api/reviews`, delete via `DELETE /api/reviews/<id>` |
 | `friends.html` | friends | `friends.js` — friend requests (send/accept/decline), friends list with Remove button (two-step confirm), **Follow/Unfollow** button in search results, **Following** section listing followed users with Unfollow; search calls `GET /api/users/search` (returns `is_following` per result) |
 | `profile.html` | profile | `profile.js` |
 | `notifications.html` | notifications | `notifications.js` — **Friend requests** section (`GET /api/friends/requests/incoming`, accept/decline); **Activity** section (`GET /api/notifications`) shows `review_posted` notifications from followed users and friends with time-ago labels and unread accent; marks all read on load via `POST /api/notifications/read` |
 | `user.html` | user | `user-profile.js` |
-| `posts.html` | *(not in render script — managed separately)* | `posts.js` — logged-in **My posts**: `GET /api/reviews`, edit via `POST /api/reviews`, delete via `DELETE /api/reviews/<id>` |
+| `echo.html` | *(static — not in render script)* | `echo.js` — logged-in **My Echo** dashboard: recent reviews (read-only, no delete) via `GET /api/reviews`; saved songs via `GET /api/reviews/saved` (falls back to `localStorage` shortlist) |
+| `messages.html` | *(static — not in render script)* | `messages.js` — **Direct Messages**: friends sidebar via `GET /api/messages/threads`; conversation panel via `GET/POST /api/messages/conversations/<friend_id>`; nav badge via `GET /api/messages/unread-count`; optional song sharing from saved list |
 
 Shared utilities include `navbar.js`, `apiBase.js`, `pathContext.js`, `bugReport.js`, and `chat.js` as referenced by layout/footers. `chat.js` is loaded on **every page** via `layout-top.html` (deferred); it injects the **Echo AI side panel** into the DOM and wires the `#echofy-ai-nav-btn` sparkle button added by `navbar.js` (authenticated users only). Checks `GET /api/chat/status` and `GET /api/auth/me` on first open; supports multi-turn conversation via `POST /api/chat`. The panel slides in from the right and pushes page content via `body.echofy-ai-open { padding-right: 360px }` (≥480 px screens); the navbar stays static. Panel state (open/closed, chat history, message HTML, chips visibility) is persisted in `sessionStorage` so the panel survives page navigation. On restore the CSS transition is temporarily suppressed (`transition: none`) so the panel appears instantly; the animation only plays on user-triggered open/close.
 

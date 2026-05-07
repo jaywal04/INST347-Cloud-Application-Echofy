@@ -209,6 +209,28 @@ class Notification(db.Model):
     review = db.relationship("SongReview", foreign_keys=[review_id])
 
 
+class DirectMessage(db.Model):
+    """A direct message between two accepted friends."""
+
+    __tablename__ = "direct_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Both NO ACTION: SQL Server rejects multiple CASCADE paths from users to the same table.
+    sender_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
+    )
+    recipient_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="NO ACTION"), nullable=False, index=True
+    )
+    text = db.Column(db.String(2000), nullable=True)
+    shared_item_json = db.Column(db.String(2048), nullable=True)  # JSON of the shared Spotify item
+    read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+
+    sender = db.relationship("User", foreign_keys=[sender_id])
+    recipient = db.relationship("User", foreign_keys=[recipient_id])
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 

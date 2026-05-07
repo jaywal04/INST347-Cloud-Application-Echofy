@@ -4,7 +4,7 @@
 
 ## What it is
 
-Echofy is a static web app plus a Python API: music discovery (Spotify), song reviews, user profiles, friends, notifications, and an AI chat assistant (Echo). Users sign up with email verification, log in via Flask sessions, and optionally connect Spotify for personalized charts and search. The Echo AI side panel (available on every page via the navbar) lets users ask questions about community reviews; it is powered by Azure AI Foundry (GPT-4o) and uses top community reviews as RAG context.
+Echofy is a static web app plus a Python API: music discovery (Spotify), song reviews, user profiles, friends, direct messages, notifications, and an AI chat assistant (Echo). Users sign up with email verification, log in via Flask sessions, and optionally connect Spotify for personalized charts and search. The Echo AI side panel (available on every page via the navbar) lets users ask questions about community reviews; it is powered by Azure AI Foundry (GPT-4o) and uses top community reviews as RAG context.
 
 ## Tech stack
 
@@ -19,7 +19,7 @@ Echofy is a static web app plus a Python API: music discovery (Spotify), song re
 
 | Path | Role |
 |------|------|
-| `backend/app/` | Flask app (`main.py`), blueprints (`auth`, `friends`, `reviews`, `telemetry`), models, Spotify client, blob/email helpers |
+| `backend/app/` | Flask app (`main.py`), blueprints (`auth`, `friends`, `reviews`, `telemetry`, `ai_chat`, `messages`), models, Spotify client, blob/email helpers |
 | `frontend/snippets/` | Source fragments: `layout-top.html`, `bodies/*.html`, `footers/*.html` |
 | `frontend/public/` | **Built** static site (HTML, `js/`, `css/`) — regenerate from snippets |
 | `scripts/render_static_html.py` | Assembles `public/*.html` from snippets |

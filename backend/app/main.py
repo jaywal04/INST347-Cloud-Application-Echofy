@@ -19,6 +19,7 @@ from werkzeug.exceptions import HTTPException
 from app.ai_chat import ai_chat_bp
 from app.auth import auth_bp
 from app.friends import friends_bp
+from app.messages import messages_bp
 from app.database import db, init_db
 from app.envutil import first_non_empty
 from app.models import SongReview, User
@@ -303,6 +304,7 @@ def create_app() -> Flask:
     app.register_blueprint(friends_bp)
     app.register_blueprint(reviews_bp)
     app.register_blueprint(ai_chat_bp)
+    app.register_blueprint(messages_bp)
 
     @app.errorhandler(OperationalError)
     @app.errorhandler(DBAPIError)

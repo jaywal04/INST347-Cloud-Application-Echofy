@@ -12,6 +12,7 @@ from pathlib import Path
 
 PORT = int(os.environ.get("PORT", "3001"))
 DIRECTORY = Path(__file__).resolve().parent / "public"
+PROJECT_ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
 # /{username}/discovery → discover.html (legacy /dashboard still supported)
 _USER_PAGE_HTML = {
@@ -48,6 +49,25 @@ class CleanURLHandler(SimpleHTTPRequestHandler):
         else:
             path, qs = self.path, ""
         path = path.split("#")[0]
+
+        if path.startswith("/assets/"):
+            rel = path[len("/assets/") :]
+            candidate = (PROJECT_ASSETS / rel).resolve()
+            try:
+                candidate.relative_to(PROJECT_ASSETS.resolve())
+            except ValueError:
+                self.send_error(404, "File not found")
+                return
+            if candidate.is_file():
+                self.send_response(200)
+                self.send_header("Content-Type", self.guess_type(str(candidate)))
+                self.send_header("Content-Length", str(candidate.stat().st_size))
+                self.end_headers()
+                with candidate.open("rb") as f:
+                    self.wfile.write(f.read())
+                return
+            self.send_error(404, "File not found")
+            return
 
         segments = [s for s in path.split("/") if s]
         if len(segments) >= 2:

@@ -73,6 +73,8 @@
   var statusChecked   = false;
   var isConfigured    = false;
   var isAuthenticated = false;
+  var userPhotoUrl    = null;
+  var userInitials    = '?';
 
   /* ── Panel open / close ───────────────────────────────────────────────── */
   function navHeight() {
@@ -128,6 +130,10 @@
     ]).then(function (res) {
       isConfigured    = !!(res[0] && res[0].configured);
       isAuthenticated = !!(res[1] && res[1].authenticated);
+      if (res[1] && res[1].authenticated && res[1].user) {
+        userPhotoUrl = res[1].user.profile_image_url || null;
+        userInitials = (res[1].user.username || '?').substring(0, 2).toUpperCase();
+      }
       statusChecked   = true;
       applyStatus();
     });
@@ -167,6 +173,31 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
   }
 
+  function makeAvatar(role) {
+    var av = document.createElement('div');
+    av.className = 'echofy-ai-avatar echofy-ai-avatar-' + role;
+    if (role === 'assistant') {
+      var img = document.createElement('img');
+      img.src = '/assets/logo-01.png';
+      img.width = 32;
+      img.height = 32;
+      img.alt = 'Echo AI';
+      av.appendChild(img);
+    } else {
+      if (userPhotoUrl) {
+        var userImg = document.createElement('img');
+        userImg.src = userPhotoUrl;
+        userImg.width = 32;
+        userImg.height = 32;
+        userImg.alt = '';
+        av.appendChild(userImg);
+      } else {
+        av.textContent = userInitials;
+      }
+    }
+    return av;
+  }
+
   function appendMessage(role, text) {
     var row = document.createElement('div');
     row.className = 'echofy-ai-msg echofy-ai-msg-' + role;
@@ -178,7 +209,13 @@
     } else {
       bubble.textContent = text;
     }
-    row.appendChild(bubble);
+    if (role === 'assistant') {
+      row.appendChild(makeAvatar('assistant'));
+      row.appendChild(bubble);
+    } else {
+      row.appendChild(bubble);
+      row.appendChild(makeAvatar('user'));
+    }
     messagesEl.appendChild(row);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     saveState();
@@ -188,7 +225,12 @@
   function appendThinking() {
     var row = document.createElement('div');
     row.className = 'echofy-ai-msg echofy-ai-msg-assistant';
-    row.innerHTML = '<div class="echofy-ai-bubble echofy-ai-thinking"><span></span><span></span><span></span></div>';
+    var av = makeAvatar('assistant');
+    var bubble = document.createElement('div');
+    bubble.className = 'echofy-ai-bubble echofy-ai-thinking';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+    row.appendChild(av);
+    row.appendChild(bubble);
     messagesEl.appendChild(row);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return row;

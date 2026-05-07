@@ -21,7 +21,7 @@
    - On Azure, logs a warning if no HTTPS frontend origin is configured.
 4. **Database** — `init_db(app)` from `app.database`.
 5. **Flask-Login** — `LoginManager`, `user_loader` → `User.query.get`, unauthorized JSON `401`.
-6. **Blueprints** (registration order): `telemetry_bp`, `auth_bp`, `friends_bp`, `reviews_bp`.
+6. **Blueprints** (registration order): `telemetry_bp`, `auth_bp`, `friends_bp`, `reviews_bp`, `ai_chat_bp`, `messages_bp`.
 7. **Error handlers** —
    - `OperationalError` / `DBAPIError` → JSON 503 “temporarily unavailable”.
    - `HTTPException` preserves HTTP semantics for API requests (for example missing API routes return JSON 404 instead of being converted to 500).
@@ -38,10 +38,11 @@
 | `reviews.py` | Blueprint `reviews`, `url_prefix='/api/reviews'`; includes like/reaction endpoints; fires `Notification` rows to followers + friends on new review post |
 | `telemetry.py` | Blueprint `telemetry`, `url_prefix='/api/telemetry'` |
 | `database.py` | SQLAlchemy `db`, URI build, pool options for remote DB |
-| `models.py` | `User`, `PendingVerification`, `FriendRequest`, `SongReview`, `ReviewLike`, `ReviewReaction`, `UserFollow`, `Notification` |
+| `models.py` | `User`, `PendingVerification`, `FriendRequest`, `SongReview`, `ReviewLike`, `ReviewReaction`, `UserFollow`, `Notification`, `DirectMessage` |
 | `schema_sync.py` | Adds missing columns on existing tables; dedupes and adds unique indexes for `review_likes` and `review_reactions`; fixes `review_reactions.emoji` column to `NVARCHAR(32) COLLATE Latin1_General_BIN2` on MSSQL so emoji are stored correctly and compared distinctly |
 | `admin/admin_cli.py` | Interactive admin tool: list tables, manage users, reset reactions, diagnose and force-fix the emoji column type/collation |
 | `ai_chat.py` | Blueprint `ai_chat`: `GET /api/chat/status` (configured check), `POST /api/chat` (login-required; sends user message + multi-turn history to Azure AI Foundry with top community reviews as context) |
+| `messages.py` | Blueprint `messages`: `GET/POST /api/messages/conversations/<friend_id>` (load/send DMs), `GET /api/messages/threads` (all friend threads with unread counts), `GET /api/messages/unread-count`; enforces accepted-friend check on all routes |
 | `spotify_client.py` | HTTP calls to Spotify, token resolution, response shaping |
 | `blob_storage.py` | Azure Blob profile images (optional) |
 | `email_service.py` | Verification emails |

@@ -24,7 +24,7 @@ Conventions: JSON bodies for POST/PUT unless noted. Auth uses Flask session cook
 | GET | `/api/spotify/playlists` | OAuth/session | User playlists (requires user token + refresh) |
 | GET | `/api/spotify/playlists/<playlist_id>/tracks` | OAuth/session | Tracks in a playlist |
 | POST | `/api/spotify/disconnect` | Session optional | Clears Spotify tokens (DB if logged in, else session) |
-| GET | `/api/spotify/top-tracks` | Optional user/OAuth | Default (no `view` or `view=auto`): personalized `/me/top/tracks` when connected, else public chart fallbacks. **Query `view`:** `global`, `usa`, `viral_global`, `viral_usa` (Spotify editorial playlists), or `new_releases` — forces that slice (prefers client credentials; user/legacy token fallback if ID/secret unset). |
+| GET | `/api/spotify/top-tracks` | Optional user/OAuth | Query **`chart`:** `auto` (default), `spotify_personal` (only your Spotify tops — short then medium term), `lastfm_tracks`, `lastfm_artists`, `lastfm_geo`. Auto prefers personalized Spotify when connected, else Last.fm overall (matched to Spotify). Other Last.fm modes use `chart.getTopTracks`, `chart.getTopArtists` + `artist.getTopTracks`, or `geo.getTopTracks`. Requires `LAST_FM_API_KEY` + Spotify app credentials for non-personal paths; geo country from `LAST_FM_GEO_COUNTRY` or `SPOTIFY_MARKET` mapping. |
 | GET | `/api/spotify/search` | Optional | Query params `q`, `type` (e.g. track) |
 | GET | `/api/spotify/recommend-by-genre` | Optional | Query param `genre` |
 | POST | `/api/spotify/recommend-like` | Optional | JSON body `item` for similarity recommendations |

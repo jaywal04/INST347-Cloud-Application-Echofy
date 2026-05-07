@@ -19,7 +19,7 @@ Pages listed in `scripts/render_static_html.py` (`PAGES`) are rebuilt by the ren
 | `index.html` | index | `main.js`, `discover.js` |
 | `login.html` | login | `auth.js` |
 | `signup.html` | signup | `auth.js` |
-| `discover.html` | discover | `discover.js` — on load calls `GET /api/spotify/top-tracks` (optional `?view=` from **Chart source**); changing the menu or **Refresh charts** refetches |
+| `discover.html` | discover | `discover.js` — `GET /api/spotify/top-tracks` with optional `chart=` from **Chart source** (Auto, Spotify-only tops, Last.fm tracks/artists/geo); reload on change |
 | `review.html` | review | `reviews-browse.js` — `GET /api/reviews/browse` (sort/category + optional text `q`); **Search Spotify** → `GET /api/spotify/search` then pick a track → `POST /api/reviews/for-item`; emoji reactions via `POST/DELETE /api/reviews/<id>/reactions` |
 | `posts.html` | posts | `posts.js` — logged-in **My posts**: `GET /api/reviews`, edit via `POST /api/reviews`, delete via `DELETE /api/reviews/<id>` |
 | `friends.html` | friends | `friends.js` — friend requests (send/accept/decline), friends list with Remove button (two-step confirm), **Follow/Unfollow** button in search results, **Following** section listing followed users with Unfollow; search calls `GET /api/users/search` (returns `is_following` per result) |

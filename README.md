@@ -130,8 +130,8 @@ The app switches automatically — no code changes needed. You can optionally se
 
 1. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), add a **Redirect URI** that matches **`SPOTIFY_REDIRECT_URI`** in your `.env` (default `http://127.0.0.1:5001/callback`). Spotify often rejects `localhost`; **`127.0.0.1`** is fine.
 2. Set **`SPOTIFY_CLIENT_ID`** and **`SPOTIFY_CLIENT_SECRET`** in repo-root `.env` (see [`.env.example`](.env.example)). Older **`JAY_SPOTIFY_*`** names are still read if the `SPOTIFY_*` variables are empty.
-3. **Connect Spotify** on the Discover page (or open `http://127.0.0.1:5001/auth/spotify`) to sign in; after callback, **your top tracks** load automatically on Discover (with chart fallbacks when needed). Use **Refresh charts** to reload.
-4. Without a connected session, **Client Credentials** loads chart-style data (Top 50 if allowed, else new releases / featured playlists) when ID and secret are set.
+3. On Discover, use **Chart source**: **Auto** tries your Spotify top tracks first (recent weeks, then ~6 months), then Last.fm’s overall chart if Spotify has nothing yet. Pick **Your top tracks — Spotify only** to force personalization without a Last.fm fallback. Pick a **Last.fm** option for that feed — set **`LAST_FM_API_KEY`** (`last_fm_api_key` also works).
+4. **Client credentials** are still needed (search, matching Last.fm to Spotify URLs, playlists). Keep **`SPOTIFY_CLIENT_ID`** and **`SPOTIFY_CLIENT_SECRET`** set.
 5. For local OAuth, use the frontend at **`http://localhost:3001`** or **`http://127.0.0.1:3001`**; the static `js/apiBase.js` points API calls at **`http://127.0.0.1:5001`** or **`http://localhost:5001`** as appropriate.
 6. Optional **`SPOTIFY_TOKEN`**: same behavior as a connected user token without the browser flow (legacy **`JAY_SPOTIFY_TOKEN`** if `SPOTIFY_TOKEN` is empty).
 
@@ -152,6 +152,10 @@ All variables go in a `.env` file at the repo root. The static frontend does **n
 | `SPOTIFY_MARKET` | Optional ISO market for playlist requests (default `US`). |
 | `SPOTIFY_REDIRECT_URI` | OAuth callback URL (must match Dashboard). Legacy: `SPOTIPY_REDIRECT_URI`. |
 | `ECHOFY_OAUTH_SUCCESS_URL` | Browser redirect after successful Spotify login. |
+| **Last.fm (Discover charts)** | |
+| `LAST_FM_API_KEY` | Last.fm API key (`last_fm_api_key` or `LASTFM_API_KEY` if empty). Used for Last.fm chart modes and Auto fallback. |
+| `LAST_FM_GEO_COUNTRY` | Optional full country name for “Top tracks in your country” (e.g. `United States`). If empty, maps from `SPOTIFY_MARKET`. |
+| `LAST_FM_SHARED_SECRET` | Optional; not used by unsigned chart calls. |
 | **Database** | |
 | `AZURE_SQL_CONNECTION_STRING` | Full ODBC connection string for Azure SQL (uses SQLite if not set). |
 | `DATABASE_URL` | Any SQLAlchemy URI — used if `AZURE_SQL_CONNECTION_STRING` is not set. |

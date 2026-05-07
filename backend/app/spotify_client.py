@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -10,6 +11,8 @@ from typing import Any
 import requests
 
 from app.envutil import first_non_empty
+
+_log = logging.getLogger(__name__)
 
 SPOTIFY_API = "https://api.spotify.com/v1"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
@@ -125,6 +128,24 @@ _cc_client_key: tuple[str, str] | None = None
 
 def _headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token.strip()}"}
+
+
+def _spotify_error_message_from_response(res: requests.Response) -> str:
+    """Best-effort message from Spotify Web API error bodies."""
+    try:
+        payload = res.json()
+    except Exception:
+        return ((res.text or "").strip())[:400]
+    err = payload.get("error")
+    if isinstance(err, dict):
+        msg = (err.get("message") or "").strip()
+        if msg:
+            return msg
+        st = err.get("status")
+        return str(st) if st not in (None, "") else ""
+    if isinstance(err, str) and err.strip():
+        return err.strip()
+    return ((res.text or "").strip())[:400]
 
 
 def _normalize_catalog_track(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -771,57 +792,164 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
     )
 
 
+def _normalize_chart_mode(raw: str) -> str:
+    x = (raw or "").strip().lower().replace("-", "_")
+    if x in ("", "auto", "default"):
+        return "auto"
+    aliases = {
+        "personal": "spotify_personal",
+        "my_tops": "spotify_personal",
+        "user": "spotify_personal",
+        "user_tops": "spotify_personal",
+        "spotify": "spotify_personal",
+        "lastfm": "lastfm_tracks",
+        "lastfm_top_tracks": "lastfm_tracks",
+        "lastfm_top_artists": "lastfm_artists",
+        "lastfm_geo": "lastfm_geo",
+        "lastfm_country": "lastfm_geo",
+    }
+    m = aliases.get(x, x)
+    if m not in ("auto", "spotify_personal", "lastfm_tracks", "lastfm_artists", "lastfm_geo"):
+        return "auto"
+    return m
+
+
+def _lastfm_variant_name_for_mode(mode: str) -> str:
+    if mode == "lastfm_artists":
+        return "artists"
+    if mode == "lastfm_geo":
+        return "geo"
+    return "tracks"
+
+
+def _spotify_me_top_tracks_payload(access_token: str) -> tuple[dict[str, Any], int]:
+    """
+    Spotify /me/top/tracks — try short_term then medium_term so light listeners still see results.
+    """
+    tok = (access_token or "").strip()
+    if not tok:
+        return (
+            {"error": "no_user_token", "message": "Connect Spotify to load your top tracks."},
+            401,
+        )
+    headers = _headers(tok)
+    for time_range, label in (
+        ("short_term", "last few weeks"),
+        ("medium_term", "last ~6 months"),
+    ):
+        me = requests.get(
+            f"{SPOTIFY_API}/me/top/tracks",
+            headers=headers,
+            params={"limit": 20, "time_range": time_range},
+            timeout=_REQUEST_TIMEOUT,
+        )
+        if me.status_code not in (200,):
+            err_status = me.status_code if me.status_code in (401, 403) else 502
+            return (
+                {
+                    "error": "invalid_user_token",
+                    "message": (
+                        "Spotify user token is missing, expired, or lacks user-top-read. "
+                        "Connect Spotify."
+                    ),
+                    "status": me.status_code,
+                },
+                err_status,
+            )
+        tracks = []
+        for item in me.json().get("items") or []:
+            t = _normalize_track(item)
+            if t:
+                tracks.append(t)
+        if tracks:
+            return (
+                {
+                    "source": "your_top_tracks",
+                    "tracks": tracks,
+                    "spotify_session_note": f"Your top tracks from Spotify ({label}).",
+                },
+                200,
+            )
+    return (
+        {
+            "source": "your_top_tracks",
+            "tracks": [],
+            "spotify_session_note": (
+                "No top tracks from Spotify for short or medium term yet — listen more, "
+                "or pick a Last.fm chart source above."
+            ),
+        },
+        200,
+    )
+
+
+def _lastfm_chart_via_spotify(
+    spotify_bearer: str,
+    *,
+    variant: str = "tracks",
+    geo_country: str | None = None,
+) -> tuple[dict[str, Any], int] | None:
+    """If Last.fm API key is configured, return chart payload; otherwise None."""
+    from app.lastfm_charts import fetch_lastfm_chart_resolved, lastfm_api_key_from_env
+
+    key = lastfm_api_key_from_env().strip()
+    if not key:
+        return None
+    return fetch_lastfm_chart_resolved(
+        key, spotify_bearer, lastfm_variant=variant, geo_country=geo_country
+    )
+
+
 def _legacy_user_then_playlist(
     user_token: str,
     *,
     client_id: str = "",
     client_secret: str = "",
 ) -> tuple[dict[str, Any], int]:
-    """Try /me/top/tracks first. If /me succeeds but there are no tracks, prefer a
-    **client-credentials** public chart — the same chart calls often return **403
-    Forbidden** when called with a **user** OAuth token (licensing / catalog rules).
-    """
-    headers = _headers(user_token)
-
-    me = requests.get(
-        f"{SPOTIFY_API}/me/top/tracks",
-        headers=headers,
-        params={"limit": 20, "time_range": "short_term"},
-        timeout=_REQUEST_TIMEOUT,
-    )
-    if me.status_code not in (200,):
-        # Do not call the Web API with an invalid/expired user token (would yield 502).
-        err_status = me.status_code if me.status_code in (401, 403) else 502
-        return (
-            {
-                "error": "invalid_user_token",
-                "message": "Spotify user token is missing, expired, or lacks user-top-read. Use Connect Spotify or set Client ID + Secret for the chart.",
-                "status": me.status_code,
-            },
-            err_status,
-        )
-
-    tracks = []
-    for item in me.json().get("items") or []:
-        t = _normalize_track(item)
-        if t:
-            tracks.append(t)
-    if tracks:
-        return ({"source": "your_top_tracks", "tracks": tracks}, 200)
+    """Auto: Spotify personalized tops (short then medium term), else Last.fm overall top tracks."""
+    payload, status = _spotify_me_top_tracks_payload(user_token)
+    if status != 200:
+        return payload, status
+    if payload.get("tracks"):
+        return payload, status
 
     cid, csec = client_id.strip(), client_secret.strip()
+    note_extra = (
+        " Showing Last.fm because Spotify returned no personalized top tracks in short or medium term."
+    )
     if cid and csec:
         cc_token, _cc_err = _get_client_credentials_token(cid, csec)
         if cc_token:
-            chart_payload, chart_status = fetch_public_chart(cc_token)
-            if chart_status == 200:
-                chart_payload["spotify_session_note"] = (
-                    "No personalized top tracks in this window yet (or Spotify returned none we "
-                    "can display). Showing a public chart instead."
-                )
-                return chart_payload, chart_status
+            got = _lastfm_chart_via_spotify(cc_token, variant="tracks")
+            if got is not None:
+                payload_fm, pst = got
+                if pst == 200 and payload_fm.get("tracks"):
+                    base = (payload_fm.get("spotify_session_note") or "").strip()
+                    payload_fm["spotify_session_note"] = (base + note_extra).strip()
+                    return payload_fm, pst
+                return payload_fm, pst
 
-    return fetch_public_chart(user_token.strip())
+    ut = user_token.strip()
+    if ut:
+        got = _lastfm_chart_via_spotify(ut, variant="tracks")
+        if got is not None:
+            payload_fm, pst = got
+            if pst == 200 and payload_fm.get("tracks"):
+                base = (payload_fm.get("spotify_session_note") or "").strip()
+                payload_fm["spotify_session_note"] = (base + note_extra).strip()
+                return payload_fm, pst
+            return payload_fm, pst
+
+    return (
+        {
+            "error": "charts_unavailable",
+            "message": (
+                "Charts need LAST_FM_API_KEY (or last_fm_api_key) plus SPOTIFY_CLIENT_ID "
+                "and SPOTIFY_CLIENT_SECRET so Last.fm titles can match Spotify tracks."
+            ),
+        },
+        503,
+    )
 
 
 def fetch_top_tracks_for_response(
@@ -831,24 +959,88 @@ def fetch_top_tracks_for_response(
     oauth_access_token: str = "",
     oauth_refresh_token: str = "",
     on_token_refresh: Callable[[str, str | None], None] | None = None,
+    chart_mode: str = "auto",
 ) -> tuple[dict[str, Any], int]:
     """
-    Prefer a connected Spotify user token for personalized top tracks.
-    Refreshes the access token when Spotify returns 401/403 and a refresh token is available.
-    Falls back to Client Credentials for a public chart when no user token is available,
-    or when the user token cannot load /me/top/tracks even after refresh.
+    Chart behavior is selected with ``chart_mode`` (HTTP ``chart=` query):
+
+    - **auto** — Personalized Spotify tops when logged in (short_term then medium_term); else Last.fm overall.
+    - **spotify_personal** — Only your Spotify top tracks (no Last.fm fallback on the server).
+    - **lastfm_tracks** / **lastfm_artists** / **lastfm_geo** — That Last.fm chart, matched to Spotify.
     """
-    user = (oauth_access_token or legacy_user_token or "").strip()
+    mode = _normalize_chart_mode(chart_mode)
     cid, csec = client_id.strip(), client_secret.strip()
     refresh_tok = (oauth_refresh_token or "").strip()
     used_oauth = bool((oauth_access_token or "").strip())
+    legacy_u = (legacy_user_token or "").strip()
+    oauth_u = (oauth_access_token or "").strip()
+    user = oauth_u or legacy_u
 
+    def _oauth_refresh_if_needed(payload: dict[str, Any], status: int) -> tuple[dict[str, Any], int]:
+        if status not in (401, 403):
+            return payload, status
+        if not (refresh_tok and cid and csec and on_token_refresh and used_oauth):
+            return payload, status
+        new_access, new_refresh, _err = refresh_spotify_user_access_token(cid, csec, refresh_tok)
+        if not new_access:
+            return payload, status
+        on_token_refresh(new_access, new_refresh)
+        return _spotify_me_top_tracks_payload(new_access)
+
+    # --- Spotify-only (explicit user tops) ---
+    if mode == "spotify_personal":
+        if not user:
+            return (
+                {
+                    "error": "no_spotify_session",
+                    "message": "Connect Spotify (or open Discover while logged in) to load your top tracks.",
+                },
+                401,
+            )
+        payload, status = _spotify_me_top_tracks_payload(user)
+        payload, status = _oauth_refresh_if_needed(payload, status)
+        return payload, status
+
+    # --- Last.fm picker (explicit); always matched via Spotify catalog search ---
+    if mode in ("lastfm_tracks", "lastfm_artists", "lastfm_geo"):
+        lf_variant = _lastfm_variant_name_for_mode(mode)
+        token: str | None = None
+        if cid and csec:
+            token, _terr = _get_client_credentials_token(cid, csec)
+        if not token and user.strip():
+            token = user.strip()
+        if not token:
+            return (
+                {
+                    "error": "missing_spotify_token",
+                    "message": (
+                        "Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET (or connect Spotify) "
+                        "to match Last.fm rows to Spotify tracks."
+                    ),
+                },
+                503,
+            )
+        got = _lastfm_chart_via_spotify(token, variant=lf_variant)
+        if got is None:
+            return (
+                {
+                    "error": "charts_unavailable",
+                    "message": (
+                        "Set LAST_FM_API_KEY (or last_fm_api_key) in .env for Last.fm charts, "
+                        "with SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET."
+                    ),
+                },
+                503,
+            )
+        return got
+
+    # --- Auto (default) ---
     if user:
         payload, status = _legacy_user_then_playlist(
             user, client_id=cid, client_secret=csec
         )
         if status in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
-            new_access, new_refresh, err = refresh_spotify_user_access_token(
+            new_access, new_refresh, _err = refresh_spotify_user_access_token(
                 cid, csec, refresh_tok
             )
             if new_access:
@@ -857,21 +1049,21 @@ def fetch_top_tracks_for_response(
                     new_access, client_id=cid, client_secret=csec
                 )
         if status in (401, 403) and cid and csec:
-            token, err = _get_client_credentials_token(cid, csec)
-            if token:
-                chart_payload, chart_status = fetch_public_chart(token)
-                if chart_status == 200:
-                    chart_payload["spotify_session_note"] = (
-                        "Personalized top tracks were unavailable (expired login or missing "
-                        "user-top-read). Showing a public Spotify chart instead — use "
-                        "Connect Spotify again for your own top tracks."
-                    )
-                    return chart_payload, chart_status
+            token_cc, err_cc = _get_client_credentials_token(cid, csec)
+            if token_cc:
+                got = _lastfm_chart_via_spotify(token_cc, variant="tracks")
+                if got is not None:
+                    payload_fm, pst = got
+                    if pst == 200 and payload_fm.get("tracks"):
+                        payload_fm["spotify_session_note"] = (
+                            "Spotify personalization wasn’t available; Last.fm chart is shown."
+                        )
+                    return got
         return payload, status
 
     if cid and csec:
-        token, err = _get_client_credentials_token(cid, csec)
-        if not token:
+        token_cc, err = _get_client_credentials_token(cid, csec)
+        if not token_cc:
             return (
                 {
                     "error": "token_error",
@@ -879,15 +1071,27 @@ def fetch_top_tracks_for_response(
                 },
                 502,
             )
-        return fetch_public_chart(token)
+        got = _lastfm_chart_via_spotify(token_cc, variant="tracks")
+        if got is not None:
+            return got
+        return (
+            {
+                "error": "charts_unavailable",
+                "message": (
+                    "Set LAST_FM_API_KEY (or last_fm_api_key) in .env for Last.fm charts, "
+                    "with SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET for catalog matching."
+                ),
+            },
+            503,
+        )
 
     return (
         {
             "error": "missing_credentials",
             "message": (
-                "Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env "
-                "(repo root) for the chart, or connect Spotify / set SPOTIFY_TOKEN. "
-                "Legacy JAY_SPOTIFY_* names still work if SPOTIFY_* are empty."
+                "Set LAST_FM_API_KEY (or last_fm_api_key) plus SPOTIFY_CLIENT_ID and "
+                "SPOTIFY_CLIENT_SECRET on the backend to load charts, or connect Spotify "
+                "for personalized top tracks."
             ),
         },
         503,
@@ -1175,13 +1379,28 @@ def fetch_user_playlists_for_response(
     refresh_tok = (oauth_refresh_token or "").strip()
     cid, csec = client_id.strip(), client_secret.strip()
     used_oauth = bool((oauth_access_token or "").strip())
+    eff_limit = max(1, min(int(limit), 50))
 
-    res = requests.get(
-        f"{SPOTIFY_API}/me/playlists",
-        headers=_headers(token),
-        params={"limit": min(limit, 50)},
-        timeout=_REQUEST_TIMEOUT,
-    )
+    def _get_playlists(bearer: str) -> requests.Response:
+        return requests.get(
+            f"{SPOTIFY_API}/me/playlists",
+            headers=_headers(bearer),
+            params={"limit": eff_limit},
+            timeout=_REQUEST_TIMEOUT,
+        )
+
+    try:
+        res = _get_playlists(token)
+    except requests.RequestException as exc:
+        _log.warning("Spotify GET /me/playlists failed (network): %s", exc)
+        return (
+            {
+                "error": "spotify_network_error",
+                "message": "Could not reach Spotify. Check your network and try again.",
+                "detail": str(exc)[:200],
+            },
+            503,
+        )
 
     if res.status_code in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
         new_access, new_refresh, _err = refresh_spotify_user_access_token(
@@ -1190,12 +1409,21 @@ def fetch_user_playlists_for_response(
         if new_access:
             on_token_refresh(new_access, new_refresh)
             token = new_access
-            res = requests.get(
-                f"{SPOTIFY_API}/me/playlists",
-                headers=_headers(token),
-                params={"limit": min(limit, 50)},
-                timeout=_REQUEST_TIMEOUT,
-            )
+            try:
+                res = _get_playlists(token)
+            except requests.RequestException as exc:
+                _log.warning(
+                    "Spotify GET /me/playlists after refresh failed (network): %s",
+                    exc,
+                )
+                return (
+                    {
+                        "error": "spotify_network_error",
+                        "message": "Could not reach Spotify after refreshing your session. Try again.",
+                        "detail": str(exc)[:200],
+                    },
+                    503,
+                )
 
     if res.status_code == 401:
         return (
@@ -1215,22 +1443,51 @@ def fetch_user_playlists_for_response(
             403,
         )
 
+    if res.status_code == 429:
+        detail = _spotify_error_message_from_response(res)
+        return (
+            {
+                "error": "spotify_rate_limited",
+                "message": "Spotify temporarily limited requests. Wait a minute, then reload the page.",
+                "detail": detail,
+                "spotify_status": 429,
+            },
+            429,
+        )
+
     if res.status_code != 200:
-        try:
-            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
-        except Exception:
-            detail = res.text[:200]
+        detail = _spotify_error_message_from_response(res)
+        _log.warning(
+            "Spotify GET /me/playlists unexpected status=%s detail=%s",
+            res.status_code,
+            (detail[:300] if detail else ""),
+        )
+        up_status = 503 if res.status_code in (500, 502, 503, 504) else 502
         return (
             {
                 "error": "spotify_api_error",
                 "message": "Could not load playlists from Spotify.",
-                "detail": detail,
+                "detail": detail or f"HTTP {res.status_code}",
+                "spotify_status": res.status_code,
+            },
+            up_status,
+        )
+
+    try:
+        page = res.json()
+    except Exception as exc:
+        _log.warning("Spotify GET /me/playlists returned invalid JSON: %s", exc)
+        return (
+            {
+                "error": "spotify_api_error",
+                "message": "Spotify returned an unexpected response for playlists.",
+                "detail": str(exc)[:200],
             },
             502,
         )
 
     playlists = []
-    for p in res.json().get("items") or []:
+    for p in page.get("items") or []:
         if not p:
             continue
         images = p.get("images") or []

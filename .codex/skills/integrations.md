@@ -25,6 +25,12 @@
 
 Covered in `spotify_api.md` — not duplicated here.
 
+## Last.fm (Discover charts)
+
+- **Module:** `backend/app/lastfm_charts.py`
+- **Used for:** Discover **`chart=`** values `lastfm_tracks`, `lastfm_artists`, `lastfm_geo`, and Auto’s Last.fm fallback when Spotify returns no tops. Personalized Spotify tops are **`chart=spotify_personal`** or **Auto** (`spotify_client.py`).
+- **API:** Unsigned `chart.getTopTracks`, `chart.getTopArtists` + `artist.getTopTracks`, `geo.getTopTracks` (`https://ws.audioscrobbler.com/2.0/?format=json`).- **Env:** `LAST_FM_API_KEY` or `last_fm_api_key` or `LASTFM_API_KEY` (required for Last.fm chart modes). Optional **`LAST_FM_GEO_COUNTRY`** (e.g. `United States`) for `chart=lastfm_geo`; if unset, the server maps **`SPOTIFY_MARKET`** (ISO2) to a country name. **`last_fm_shared_secret` / `LAST_FM_SHARED_SECRET`** are not used for unsigned chart calls.
+
 ## Azure SQL
 
 Covered in `database.md` — ODBC connection string env `AZURE_SQL_CONNECTION_STRING`.

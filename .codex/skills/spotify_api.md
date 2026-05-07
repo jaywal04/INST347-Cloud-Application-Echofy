@@ -22,7 +22,8 @@ Resolution logic lives in `spotify_client._resolve_spotify_token` and helpers.
 ## Web API usage (`spotify_client.py`)
 
 - Base: `https://api.spotify.com/v1`
-- Implements playlist fetch, top tracks, user playlists, search, genre-based recommendations, “recommend like this item”, and chart fallbacks (e.g. Global Top 50 playlist id `37i9dQZEVXbMDoHDwVN2tF`). **`GET /api/spotify/top-tracks?view=…`** loads a specific editorial chart (USA Top 50, Viral 50 global/USA, new releases) via `fetch_curated_chart_for_response` in `spotify_client.py`.
+- Implements playlist fetch, top tracks, user playlists, search, genre-based recommendations, and “recommend like this item”.
+- **Charts / `GET /api/spotify/top-tracks`:** Query param **`chart`:** `auto` (default), `spotify_personal`, `lastfm_tracks`, `lastfm_artists`, `lastfm_geo`. **Auto** uses `/me/top/tracks` with **short_term** then **medium_term** when a user token exists; if both are empty, falls back to Last.fm overall top tracks. **spotify_personal** is Spotify-only (no Last.fm fallback). Other values load the corresponding Last.fm chart in `lastfm_charts.py` and match rows to Spotify search. Optional **`LAST_FM_GEO_COUNTRY`** (full country name) or **`SPOTIFY_MARKET`** → ISO2 → country name for `lastfm_geo`.
 - **Search:** Spotify’s API caps `limit` at 10 for `/search`; code uses `_SPOTIFY_SEARCH_MAX_LIMIT = 10`. If a **user** token is used first but Spotify search fails (for example expired token, scope/access issue, or app-user registration gating), search **retries once** with **client credentials** when ID/secret are set, and may include `spotify_session_note` in the JSON payload.
 - Token refresh: refresh token exchanged when access token expires; callback `on_token_refresh` persists new access (and refresh if rotated) to DB or session.
 
@@ -36,4 +37,4 @@ Resolution logic lives in `spotify_client._resolve_spotify_token` and helpers.
 
 ## Env reference
 
-See `.env.example` for `SPOTIFY_*`, `ECHOFY_OAUTH_SUCCESS_URL`, `ECHOFY_SPOTIFY_SCOPES`, and CORS-related vars used with OAuth return URLs.
+See `.env.example` for `SPOTIFY_*`, Last.fm keys, `ECHOFY_OAUTH_SUCCESS_URL`, `ECHOFY_SPOTIFY_SCOPES`, and CORS-related vars used with OAuth return URLs.

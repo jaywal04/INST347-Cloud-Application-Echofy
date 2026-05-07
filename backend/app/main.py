@@ -27,7 +27,6 @@ from app.reviews import reviews_bp
 from app.telemetry import telemetry_bp
 from app.spotify_client import (
     SPOTIFY_TOKEN_URL,
-    fetch_curated_chart_for_response,
     fetch_playlist_tracks_for_response,
     fetch_top_tracks_for_response,
     fetch_user_playlists_for_response,
@@ -350,9 +349,14 @@ def create_app() -> Flask:
     def spotify_session():
         if current_user.is_authenticated:
             u = db.session.get(User, current_user.id)
-            if u and (u.spotify_access_token or u.spotify_refresh_token):
+            if u and (
+                (u.spotify_access_token or "").strip()
+                or (u.spotify_refresh_token or "").strip()
+            ):
                 return jsonify(connected=True)
-        return jsonify(connected=bool(session.get("spotify_access_token")))
+        return jsonify(
+            connected=bool((session.get("spotify_access_token") or "").strip())
+        )
 
     @app.get("/api/spotify/playlists")
     def spotify_playlists():
@@ -408,32 +412,21 @@ def create_app() -> Flask:
     def _spotify_tokens() -> tuple[str, str]:
         """Return (access_token, refresh_token) preferring DB for logged-in users."""
         if current_user.is_authenticated:
-            return (
-                current_user.spotify_access_token or "",
-                current_user.spotify_refresh_token or "",
-            )
+            access = (current_user.spotify_access_token or "").strip()
+            refresh = (current_user.spotify_refresh_token or "").strip()
+            if not access and not refresh:
+                access = (session.get("spotify_access_token") or "").strip()
+                refresh = (session.get("spotify_refresh_token") or "").strip()
+            return (access, refresh)
         return (
-            session.get("spotify_access_token") or "",
-            session.get("spotify_refresh_token") or "",
+            (session.get("spotify_access_token") or "").strip(),
+            (session.get("spotify_refresh_token") or "").strip(),
         )
 
     @app.get("/api/spotify/top-tracks")
     def spotify_top_tracks():
-        view = (request.args.get("view") or "").strip().lower().replace("-", "_")
-        if view and view not in ("auto", "personal", "default", ""):
-            oauth_tok, refresh_tok = _spotify_tokens()
-            payload, status = fetch_curated_chart_for_response(
-                view,
-                client_id=_spotify_client_id(),
-                client_secret=_spotify_client_secret(),
-                legacy_user_token=_spotify_legacy_user_token(),
-                oauth_access_token=oauth_tok,
-                oauth_refresh_token=refresh_tok,
-                on_token_refresh=_persist_spotify_tokens,
-            )
-            return jsonify(payload), status
-
         oauth_tok, refresh_tok = _spotify_tokens()
+        chart_arg = (request.args.get("chart") or "").strip()
         payload, status = fetch_top_tracks_for_response(
             client_id=_spotify_client_id(),
             client_secret=_spotify_client_secret(),
@@ -441,6 +434,7 @@ def create_app() -> Flask:
             oauth_access_token=oauth_tok,
             oauth_refresh_token=refresh_tok,
             on_token_refresh=_persist_spotify_tokens,
+            chart_mode=chart_arg or "auto",
         )
         return jsonify(payload), status
 

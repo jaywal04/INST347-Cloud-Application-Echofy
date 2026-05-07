@@ -416,8 +416,8 @@
     /* OAuth redirect can land before Set-Cookie is sent on cross-origin session checks; poll briefly. */
     if (oauthJustConnected) {
       var sessionPollAttempt = 0;
-      var sessionPollMax = 15;
-      var sessionPollMs = 200;
+      var sessionPollMax = 6;
+      var sessionPollMs = 1000;
       function pollSpotifySession() {
         sessionPollAttempt++;
         fetchSpotifySession()

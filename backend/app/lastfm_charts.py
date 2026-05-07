@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Any
 
 import requests
@@ -19,6 +21,10 @@ from app.spotify_client import (
 _log = logging.getLogger(__name__)
 
 LASTFM_API = "https://ws.audioscrobbler.com/2.0/"
+
+_CHART_CACHE_TTL = 300  # seconds — reuse resolved chart results for 5 minutes
+_chart_cache: dict[str, tuple[float, Any]] = {}
+_chart_cache_lock = threading.Lock()
 
 # ISO 3166-1 alpha-2 → English country name for Last.fm geo.getTopTracks
 _ISO2_TO_LASTFM_COUNTRY: dict[str, str] = {
@@ -316,6 +322,13 @@ def fetch_lastfm_chart_resolved(
     if v in ("geo", "country", "geo_tracks"):
         g = g or lastfm_geo_country_name()
 
+    cache_key = f"{v}|{g or ''}"
+    with _chart_cache_lock:
+        entry = _chart_cache.get(cache_key)
+        if entry and time.time() - entry[0] < _CHART_CACHE_TTL:
+            _log.debug("lastfm chart cache hit: %s", cache_key)
+            return entry[1]
+
     rows, err = fetch_lastfm_rows_for_variant(api_key, v, geo_country=g, limit=raw_limit)
     if err:
         return (
@@ -370,7 +383,7 @@ def fetch_lastfm_chart_resolved(
         )
 
     source_key, note = _source_and_note_for_variant(v, g)
-    return (
+    result: tuple[dict[str, Any], int] = (
         {
             "source": source_key,
             "tracks": resolved,
@@ -379,3 +392,6 @@ def fetch_lastfm_chart_resolved(
         },
         200,
     )
+    with _chart_cache_lock:
+        _chart_cache[cache_key] = (time.time(), result)
+    return result

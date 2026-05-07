@@ -32,6 +32,9 @@ CHART_PLAYLIST_VIEWS: dict[str, tuple[str, str]] = {
 
 _REFRESH_MARGIN_SEC = 60
 _REQUEST_TIMEOUT = 20
+_GENRE_CACHE_TTL = 300  # seconds — reuse genre recommendation results for 5 minutes
+_genre_cache: dict[str, tuple[float, Any]] = {}
+_genre_cache_lock = threading.Lock()
 # Spotify GET /v1/search: limit must be 0–10 (inclusive). Values above 10 return "Invalid limit".
 _SPOTIFY_SEARCH_MAX_LIMIT = 10
 _SEARCH_LIMIT = 10
@@ -1562,6 +1565,12 @@ def recommend_tracks_for_genre_response(
             400,
         )
 
+    with _genre_cache_lock:
+        entry = _genre_cache.get(seed)
+        if entry and time.time() - entry[0] < _GENRE_CACHE_TTL:
+            _log.debug("genre cache hit: %s", seed)
+            return entry[1]
+
     token, _token_source, token_error = _resolve_spotify_token(
         client_id=client_id,
         client_secret=client_secret,
@@ -1680,7 +1689,7 @@ def recommend_tracks_for_genre_response(
             if len(items) >= _GENRE_RECOMMENDATION_LIMIT:
                 break
 
-    return (
+    genre_result: tuple[dict[str, Any], int] = (
         {
             "source": "spotify_genre_recommendations",
             "genre": seed,
@@ -1688,6 +1697,9 @@ def recommend_tracks_for_genre_response(
         },
         200,
     )
+    with _genre_cache_lock:
+        _genre_cache[seed] = (time.time(), genre_result)
+    return genre_result
 
 
 def recommend_similar_for_item_response(

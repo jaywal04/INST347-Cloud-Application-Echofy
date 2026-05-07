@@ -226,6 +226,11 @@
         .catch(function () {});
     })
     .catch(function () {
+      var signIn = document.createElement('a');
+      signIn.href = '/login';
+      signIn.className = 'nav-cta';
+      signIn.textContent = 'Sign In';
+      authDiv.appendChild(signIn);
       reveal();
     });
 })();

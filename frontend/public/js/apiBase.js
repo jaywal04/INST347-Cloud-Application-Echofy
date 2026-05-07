@@ -59,12 +59,7 @@
       window.ECHOFY_API_BASE = fromJson;
     } else {
       var fb = devFallbackApiBase();
-      window.ECHOFY_API_BASE = fb || '';
-      if (!window.ECHOFY_API_BASE) {
-        console.error(
-          '[echofy] Missing /echofy-config.json with { "apiBase": "https://your-api..." }. See echofy-config.example.json.'
-        );
-      }
+      window.ECHOFY_API_BASE = fb || 'https://echofy-backend-c7b8a0are7abgxhn.canadacentral-01.azurewebsites.net';
     }
   }
 

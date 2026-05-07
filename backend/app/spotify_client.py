@@ -964,19 +964,21 @@ def search_spotify_for_response(
         params=params,
         timeout=_REQUEST_TIMEOUT,
     )
-    # Catalog search works with client credentials; expired user/session tokens should not break it.
-    if res.status_code == 401 and token_source == "user":
+    # Catalog search works with client credentials; user-token failures should not block search.
+    if res.status_code != 200 and token_source == "user":
         cid, csec = client_id.strip(), client_secret.strip()
         if cid and csec:
             cc_token, _cc_err = _get_client_credentials_token(cid, csec)
             if cc_token:
-                res = requests.get(
+                cc_res = requests.get(
                     f"{SPOTIFY_API}/search",
                     headers=_headers(cc_token),
                     params=params,
                     timeout=_REQUEST_TIMEOUT,
                 )
-                used_client_credentials_fallback = True
+                if cc_res.status_code == 200:
+                    res = cc_res
+                    used_client_credentials_fallback = True
 
     if res.status_code != 200:
         try:
@@ -1007,8 +1009,8 @@ def search_spotify_for_response(
     }
     if used_client_credentials_fallback:
         payload["spotify_session_note"] = (
-            "Your Spotify login expired; search used the app catalog instead. "
-            "Open Discover and use Connect Spotify if you want a fresh session."
+            "Your Spotify account session was unavailable for search; app catalog results are shown instead. "
+            "Reconnect Spotify only if you want personalized features."
         )
     return (payload, 200)
 

@@ -2,57 +2,13 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
-  var MSG_TRY_AGAIN =
-    'Something went wrong. The team has been notified. Please try again shortly.';
   var STORAGE_KEY = 'echofy-discover-shortlist';
 
-  var echofy_authenticated = false;
-
-  function refreshAuthButtons() {
-    var display = echofy_authenticated ? '' : 'none';
-    document.querySelectorAll('[data-save-item], [data-remove-item], [data-review-item]').forEach(function (btn) {
-      btn.style.display = display;
-    });
-    if (connectLink) {
-      if (!echofy_authenticated) {
-        connectLink.hidden = true;
-        connectLink.style.display = 'none';
-      }
-    }
-  }
-
-  if (API_BASE) {
-    fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        echofy_authenticated = !!(data && data.authenticated);
-        refreshAuthButtons();
-      })
-      .catch(function () {});
-  }
-
-  function reportDiscover(scope, err, extra) {
-    if (window.echofyReportClientBug) {
-      window.echofyReportClientBug(
-        Object.assign(
-          {
-            scope: scope,
-            apiBasePresent: !!API_BASE,
-            errorMessage: err && err.message ? String(err.message) : 'request_failed',
-          },
-          extra || {}
-        )
-      );
-    }
-  }
-
   var btn = document.getElementById('btn-spotify-top');
-  var chartViewSelect = document.getElementById('spotify-chart-view');
   var statusEl = document.getElementById('spotify-status');
   var resultsEl = document.getElementById('spotify-results');
   var connectLink = document.getElementById('spotify-connect-link');
   var connectedBadge = document.getElementById('spotify-connected-badge');
-  var disconnectBtn = document.getElementById('spotify-disconnect-btn');
   var searchForm = document.getElementById('spotify-search-form');
   var searchInput = document.getElementById('spotify-search-input');
   var searchStatusEl = document.getElementById('spotify-search-status');
@@ -63,26 +19,8 @@
   var surpriseResultEl = document.getElementById('spotify-surprise-result');
   var shortlistEl = document.getElementById('spotify-shortlist');
   var clearShortlistBtn = document.getElementById('btn-clear-shortlist');
-  var playlistsDivider = document.getElementById('playlists-divider');
-  var playlistsPanelHead = document.getElementById('playlists-panel-head');
-  var playlistsStatusEl = document.getElementById('playlists-status');
-  var playlistsEl = document.getElementById('spotify-playlists');
 
   var fetchOpts = { credentials: 'include' };
-
-  function spotifyOAuthConnectUrl() {
-    if (!API_BASE) return '';
-    try {
-      return (
-        API_BASE +
-        '/auth/spotify?return=' +
-        encodeURIComponent(window.location.origin)
-      );
-    } catch (e) {
-      return API_BASE + '/auth/spotify';
-    }
-  }
-
   var selectedSearchType = 'track';
   var currentItems = [];
   var itemCache = {};
@@ -95,369 +33,29 @@
     genre: 'Search genres like afrobeat, house, or indie...',
   };
 
-  if (!btn && !searchForm) return;
+  if (!btn || !statusEl || !resultsEl) return;
 
   if (connectLink && API_BASE) {
-    connectLink.href = spotifyOAuthConnectUrl();
+    connectLink.href = API_BASE + '/auth/spotify';
   }
 
-  function renderPlaylistCard(playlist) {
-    var li = document.createElement('li');
-    li.className = 'spotify-track-row';
-
-    // ── Header row ──────────────────────────────────────────────────────────
-    var header = document.createElement('div');
-    header.className = 'playlist-card-header';
-
-    var art = document.createElement('div');
-    art.className = 'spotify-track-art';
-    if (playlist.image) {
-      var img = document.createElement('img');
-      img.src = playlist.image;
-      img.alt = '';
-      art.appendChild(img);
-    } else {
-      art.textContent = '♫';
-    }
-
-    var body = document.createElement('div');
-    body.className = 'spotify-track-body';
-
-    var nameEl = document.createElement('div');
-    nameEl.className = 'spotify-track-name';
-    nameEl.textContent = playlist.name;
-
-    var metaParts = [];
-    if (playlist.track_count != null) metaParts.push(playlist.track_count + ' tracks');
-    if (playlist.owner) metaParts.push('by ' + playlist.owner);
-    if (playlist.collaborative) metaParts.push('collaborative');
-    else if (playlist.public === false) metaParts.push('private');
-
-    var meta = document.createElement('div');
-    meta.className = 'spotify-track-meta';
-    meta.textContent = metaParts.join(' · ');
-
-    body.appendChild(nameEl);
-    if (playlist.description) {
-      var desc = document.createElement('div');
-      desc.className = 'spotify-track-meta';
-      desc.textContent = playlist.description;
-      body.appendChild(desc);
-    }
-    body.appendChild(meta);
-
-    var actions = document.createElement('div');
-    actions.className = 'spotify-track-actions';
-
-    var viewBtn = document.createElement('button');
-    viewBtn.type = 'button';
-    viewBtn.className = 'btn-ghost btn-sm';
-    viewBtn.textContent = 'View tracks';
-    actions.appendChild(viewBtn);
-
-    if (playlist.url) {
-      var open = document.createElement('a');
-      open.className = 'btn-ghost btn-sm';
-      open.href = playlist.url;
-      open.target = '_blank';
-      open.rel = 'noopener noreferrer';
-      open.textContent = 'Open';
-      actions.appendChild(open);
-    }
-
-    header.appendChild(art);
-    header.appendChild(body);
-    header.appendChild(actions);
-    li.appendChild(header);
-
-    // ── Expandable track section ─────────────────────────────────────────────
-    var section = document.createElement('div');
-    section.className = 'playlist-tracks-section';
-    section.hidden = true;
-
-    var searchWrap = document.createElement('div');
-    searchWrap.className = 'playlist-search-wrap';
-
-    var searchInput = document.createElement('input');
-    searchInput.type = 'search';
-    searchInput.className = 'playlist-search-input';
-    searchInput.placeholder = 'Filter tracks…';
-    searchInput.autocomplete = 'off';
-    searchWrap.appendChild(searchInput);
-
-    var trackStatus = document.createElement('p');
-    trackStatus.className = 'discover-hint';
-
-    var trackList = document.createElement('div');
-    trackList.className = 'playlist-track-list-wrap';
-
-    section.appendChild(searchWrap);
-    section.appendChild(trackStatus);
-    section.appendChild(trackList);
-    li.appendChild(section);
-
-    // ── State ────────────────────────────────────────────────────────────────
-    var loaded = false;
-    var allTracks = [];
-
-    function filterAndRender(query) {
-      var q = (query || '').trim().toLowerCase();
-      var filtered = q
-        ? allTracks.filter(function (t) {
-            return (
-              (t.name || '').toLowerCase().indexOf(q) !== -1 ||
-              (t.artists || []).some(function (a) { return a.toLowerCase().indexOf(q) !== -1; }) ||
-              (t.album || '').toLowerCase().indexOf(q) !== -1
-            );
-          })
-        : allTracks;
-
-      trackStatus.textContent = q
-        ? filtered.length + ' of ' + allTracks.length + ' track' + (allTracks.length === 1 ? '' : 's') + ' match.'
-        : allTracks.length + ' track' + (allTracks.length === 1 ? '' : 's');
-
-      trackList.innerHTML = '';
-      if (!filtered.length) {
-        var empty = document.createElement('p');
-        empty.className = 'spotify-empty';
-        empty.textContent = q ? 'No tracks match that search.' : 'This playlist has no tracks.';
-        trackList.appendChild(empty);
-        return;
-      }
-      rememberItems(filtered);
-      var ul = document.createElement('ul');
-      ul.className = 'spotify-track-list';
-      filtered.forEach(function (track, idx) {
-        ul.appendChild(createItemRow(track, idx, {}));
-      });
-      trackList.appendChild(ul);
-    }
-
-    function loadTracks() {
-      if (!API_BASE) return;
-      trackStatus.textContent = 'Loading…';
-      trackList.innerHTML = '';
-
-      fetch(API_BASE + '/api/spotify/playlists/' + encodeURIComponent(playlist.id) + '/tracks', fetchOpts)
-        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-        .then(function (ref) {
-          if (!ref.ok) {
-            trackStatus.innerHTML = '';
-            var m = (ref.data.message || '').trim();
-            var d = (ref.data.detail || '').trim();
-            var baseMsg = m || 'Could not load tracks.';
-            if (d && d !== m && baseMsg.indexOf(d) === -1) {
-              baseMsg += ' — ' + d;
-            }
-            trackStatus.appendChild(document.createTextNode(baseMsg));
-            if (
-              ref.data.error === 'insufficient_scope' ||
-              ref.data.error === 'token_expired' ||
-              ref.data.error === 'spotify_forbidden'
-            ) {
-              var reconnectLink = document.createElement('a');
-              reconnectLink.href = spotifyOAuthConnectUrl();
-              reconnectLink.textContent =
-                ref.data.error === 'spotify_forbidden'
-                  ? ' Reconnect Spotify (needed after new permissions) →'
-                  : ' Reconnect Spotify →';
-              reconnectLink.style.marginLeft = '0.4rem';
-              trackStatus.appendChild(reconnectLink);
-            }
-            return;
-          }
-          allTracks = ref.data.tracks || [];
-          loaded = true;
-          var total =
-            ref.data.total != null && ref.data.total !== ''
-              ? Number(ref.data.total)
-              : allTracks.length;
-          if (Number.isNaN(total)) total = allTracks.length;
-          if (allTracks.length === 0 && total > 0) {
-            trackStatus.textContent =
-              'Spotify lists ' +
-              total +
-              ' item(s), but none could be shown here (e.g. unavailable in your region, removed from Spotify, or local-only files the web API omits). Open the playlist in the Spotify app to confirm.';
-          } else if (total > allTracks.length) {
-            trackStatus.textContent =
-              'Showing first ' + allTracks.length + ' of ' + total + ' tracks.';
-          }
-          filterAndRender(searchInput.value);
-        })
-        .catch(function (err) {
-          reportDiscover('discover.playlist_tracks', err, {});
-          trackStatus.textContent = MSG_TRY_AGAIN;
-        });
-    }
-
-    searchInput.addEventListener('input', function () {
-      if (loaded) filterAndRender(searchInput.value);
-    });
-
-    viewBtn.addEventListener('click', function () {
-      var expanding = section.hidden;
-      section.hidden = !expanding;
-      viewBtn.textContent = expanding ? 'Hide tracks' : 'View tracks';
-      if (expanding && !loaded) loadTracks();
-      if (expanding) searchInput.focus();
-    });
-
-    return li;
-  }
-
-  function loadPlaylists() {
-    if (!API_BASE || !playlistsEl) return;
-    if (playlistsStatusEl) playlistsStatusEl.textContent = 'Loading playlists…';
-
-    fetch(API_BASE + '/api/spotify/playlists', fetchOpts)
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); })
-      .then(function (ref) {
-        if (!ref.ok) {
-          if (playlistsStatusEl) playlistsStatusEl.textContent = ref.data.message || 'Could not load playlists.';
-          return;
-        }
-        var playlists = ref.data.playlists || [];
-        if (playlistsStatusEl) {
-          playlistsStatusEl.textContent = playlists.length
-            ? playlists.length + ' playlist' + (playlists.length === 1 ? '' : 's') + ' found.'
-            : 'No playlists found on this Spotify account.';
-        }
-        if (!playlists.length) return;
-        var ul = document.createElement('ul');
-        ul.className = 'spotify-track-list';
-        playlists.forEach(function (p) { ul.appendChild(renderPlaylistCard(p)); });
-        playlistsEl.innerHTML = '';
-        playlistsEl.appendChild(ul);
-        playlistsEl.hidden = false;
-      })
-      .catch(function (err) {
-        reportDiscover('discover.spotify_playlists', err, {});
-        if (playlistsStatusEl) playlistsStatusEl.textContent = MSG_TRY_AGAIN;
-      });
-  }
-
-  function updateSpotifyConnectionUi(connected) {
-    if (connectLink) {
-      connectLink.hidden = !!connected;
-      /* .discover-connect-link { display: inline-block } can override [hidden] in CSS cascade */
-      connectLink.style.display = connected ? 'none' : '';
-      if (connected) {
-        connectLink.setAttribute('aria-hidden', 'true');
-      } else {
-        connectLink.removeAttribute('aria-hidden');
-      }
-      if (!connected && API_BASE) {
-        connectLink.href = spotifyOAuthConnectUrl();
-      }
-    }
-    if (connectedBadge) connectedBadge.hidden = !connected;
-    if (disconnectBtn) disconnectBtn.hidden = !connected;
-    if (playlistsDivider) playlistsDivider.hidden = !connected;
-    if (playlistsPanelHead) playlistsPanelHead.hidden = !connected;
-    if (connected && playlistsEl && playlistsEl.hidden && !(playlistsStatusEl && playlistsStatusEl.textContent)) {
-      loadPlaylists();
-    }
-  }
-
-  var oauthJustConnected = false;
-  try {
-    oauthJustConnected = new URLSearchParams(window.location.search).get('spotify') === 'connected';
-  } catch (e) {}
-
-  // OAuth success adds ?spotify=connected — show badge even when /api/spotify/session
-  // does not see the cookie yet (common on dev: localhost:3001 → localhost:5001 partitioning).
-  if (oauthJustConnected) {
-    updateSpotifyConnectionUi(true);
-  }
-  if (oauthJustConnected && statusEl) {
-    statusEl.textContent =
-      'Spotify connected. Charts load below automatically (your top tracks when available, otherwise the chart).';
-  }
-  if (oauthJustConnected && window.history && window.history.replaceState) {
-    try {
-      var cleanParams = new URLSearchParams(window.location.search);
-      cleanParams.delete('spotify');
-      var nextPath = window.location.pathname + (cleanParams.toString() ? '?' + cleanParams.toString() : '');
-      window.history.replaceState({}, '', nextPath);
-    } catch (e2) {}
-  }
-
-  if (API_BASE && (connectLink || connectedBadge || disconnectBtn)) {
+  if (API_BASE && connectedBadge) {
     fetch(API_BASE + '/api/spotify/session', fetchOpts)
       .then(function (r) {
         return r.json();
       })
       .then(function (data) {
         if (data.connected) {
-          updateSpotifyConnectionUi(true);
-        } else if (!oauthJustConnected) {
-          updateSpotifyConnectionUi(false);
+          connectedBadge.hidden = false;
         }
       })
-      .catch(function () {
-        if (!oauthJustConnected) {
-          updateSpotifyConnectionUi(false);
-        }
-      });
+      .catch(function () {});
   }
 
-  if (disconnectBtn && API_BASE) {
-    disconnectBtn.addEventListener('click', function () {
-      disconnectBtn.disabled = true;
-      fetch(API_BASE + '/api/spotify/disconnect', {
-        method: 'POST',
-        credentials: 'include',
-      })
-        .then(function (r) {
-          return r.json().then(function (data) {
-            return { ok: r.ok, data: data };
-          });
-        })
-        .then(function (ref) {
-          if (!ref.ok || !ref.data.ok) {
-            if (statusEl) statusEl.textContent = 'Could not disconnect Spotify. Try again.';
-            return;
-          }
-          updateSpotifyConnectionUi(false);
-          if (playlistsEl) { playlistsEl.hidden = true; playlistsEl.innerHTML = ''; }
-          if (playlistsStatusEl) playlistsStatusEl.textContent = '';
-          if (statusEl) {
-            statusEl.textContent =
-              'Spotify disconnected. You can connect again anytime for personalized top tracks.';
-          }
-        })
-        .catch(function (err) {
-          reportDiscover('discover.spotify_disconnect', err, {});
-          if (statusEl) statusEl.textContent = MSG_TRY_AGAIN;
-        })
-        .finally(function () {
-          disconnectBtn.disabled = false;
-        });
-    });
+  if (window.location.search.indexOf('spotify=connected') !== -1 && statusEl) {
+    statusEl.textContent =
+      'Spotify connected. Use “Show top Spotify music” for your top tracks.';
   }
-
-  (function showSpotifyOAuthErrorFromUrl() {
-    if (!statusEl) return;
-    try {
-      var params = new URLSearchParams(window.location.search);
-      var code = params.get('spotify_error');
-      if (!code) return;
-      var desc = (params.get('spotify_error_description') || '').trim();
-      var human =
-        code === 'server_error'
-          ? 'Spotify had a temporary problem (server_error). Wait a minute and try Connect Spotify again, or check status.spotify.com.'
-          : code === 'access_denied'
-            ? 'Spotify login was cancelled.'
-            : 'Spotify login did not finish (' + code + ').';
-      statusEl.textContent = human + (desc ? ' ' + desc : '');
-      if (window.history && window.history.replaceState) {
-        params.delete('spotify_error');
-        params.delete('spotify_error_description');
-        var next = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-        window.history.replaceState({}, '', next);
-      }
-    } catch (e) {}
-  })();
 
   function loadShortlist() {
     try {
@@ -510,7 +108,6 @@
       })
       .catch(function (err) {
         console.error('[Echofy] /api/reviews fetch failed', err);
-        reportDiscover('discover.reviews_load', err, { endpoint: '/api/reviews' });
       });
   }
 
@@ -715,89 +312,10 @@
       });
   }
 
-  var BTN_CHARTS_LABEL = 'Refresh charts';
-
   function setLoading(loading) {
-    if (!btn) return;
     btn.disabled = loading;
-    btn.textContent = loading ? 'Loading…' : BTN_CHARTS_LABEL;
+    btn.textContent = loading ? 'Loading...' : 'Show top Spotify music';
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
-  }
-
-  function loadTopSpotifyMusic() {
-    if (!API_BASE) {
-      if (statusEl) {
-        statusEl.textContent =
-          'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
-      }
-      return;
-    }
-    if (!statusEl || !resultsEl) return;
-
-    setLoading(true);
-    statusEl.textContent = '';
-    resultsEl.hidden = true;
-    resultsEl.innerHTML = '';
-
-    var topUrl = API_BASE + '/api/spotify/top-tracks';
-    if (chartViewSelect && chartViewSelect.value) {
-      topUrl += '?view=' + encodeURIComponent(chartViewSelect.value);
-    }
-
-    fetch(topUrl, fetchOpts)
-      .then(function (res) {
-        var status = res.status;
-        return res.text().then(function (raw) {
-          var data;
-          try { data = JSON.parse(raw); } catch (_) { data = null; }
-          return { ok: res.ok, status: status, data: data, raw: data ? null : raw };
-        });
-      })
-      .then(function (_ref) {
-        var ok = _ref.ok;
-        var data = _ref.data;
-
-        if (!data) {
-          reportDiscover('discover.top_tracks', null, {
-            endpoint: '/api/spotify/top-tracks',
-            errorMessage: 'non_json_response',
-            httpStatus: _ref.status,
-          });
-          statusEl.textContent = MSG_TRY_AGAIN;
-          return;
-        }
-
-        if (!ok) {
-          statusEl.textContent = apiErrorText(
-            data,
-            'Could not load Spotify data. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env and restart the backend.'
-          );
-          return;
-        }
-
-        var tracks = data.tracks || [];
-        if (!tracks.length) {
-          statusEl.textContent = 'Spotify returned no tracks.';
-          return;
-        }
-
-        currentItems = tracks;
-        statusEl.textContent = data.spotify_session_note || '';
-        renderItems(resultsEl, sourceLabel(data.source, data), tracks);
-        if (btn) btn.setAttribute('aria-expanded', 'true');
-        refreshSaveButtons();
-      })
-      .catch(function (err) {
-        var etype = err instanceof TypeError ? 'network_error' : 'fetch_error';
-        reportDiscover('discover.top_tracks', null, {
-          endpoint: '/api/spotify/top-tracks',
-          errorMessage: etype,
-        });
-        statusEl.textContent = MSG_TRY_AGAIN;
-      })
-      .finally(function () {
-        setLoading(false);
-      });
   }
 
   function setSearchLoading(loading) {
@@ -812,23 +330,15 @@
 
   function sourceLabel(source, data) {
     if (source === 'your_top_tracks') return 'Your top tracks (Spotify)';
-    if (source === 'global_top_50') return 'Global Top 50 (Spotify)';
-    if (source === 'usa_top_50') return 'Top 50 — USA (Spotify)';
-    if (source === 'viral_50_global') return 'Viral 50 — Global (Spotify)';
-    if (source === 'viral_50_usa') return 'Viral 50 — USA (Spotify)';
-    if (source === 'new_releases') return 'New releases (Spotify)';
     if (source === 'spotify_search') return 'Search results (Spotify)';
     if (source === 'spotify_genre_search') return 'Genre seeds (Spotify)';
     if (source === 'spotify_genre_recommendations' && data && data.genre) {
       return 'Genre pick · ' + prettyGenreName(data.genre);
     }
     if (source === 'spotify_genre_recommendations') return 'Genre pick (Spotify)';
-    if (source === 'featured_playlist' && data && data.playlist_name) {
-      return 'Featured: ' + data.playlist_name + ' (Spotify)';
+    if (source === 'global_top_50' || source === 'new_releases' || source === 'featured_playlist') {
+      return 'Your top tracks (Spotify)';
     }
-    if (source === 'featured_playlist') return 'Featured playlist (Spotify)';
-    if (source === 'search_explore') return 'Explore tracks (Spotify search)';
-    if (source === 'genre_recommendations') return 'Genre mix (Spotify)';
     return 'Spotify';
   }
 
@@ -918,7 +428,6 @@
         saveBtn.className = 'btn-ghost btn-sm';
         saveBtn.textContent = opts.remove ? 'Remove' : isSaved(item) ? 'Saved' : 'Save';
         saveBtn.setAttribute(opts.remove ? 'data-remove-item' : 'data-save-item', itemKey(item));
-        saveBtn.style.display = echofy_authenticated ? '' : 'none';
         actions.appendChild(saveBtn);
       }
 
@@ -927,7 +436,6 @@
       reviewBtn.className = 'btn-ghost btn-sm';
       reviewBtn.textContent = review ? 'Edit review' : 'Rate / Review';
       reviewBtn.setAttribute('data-review-item', itemKey(item));
-      reviewBtn.style.display = echofy_authenticated ? '' : 'none';
       actions.appendChild(reviewBtn);
     }
 
@@ -1076,8 +584,7 @@
         })
         .catch(function (err) {
           console.error('[Echofy] /api/reviews save failed', err);
-          reportDiscover('discover.review_save', err, { endpoint: '/api/reviews' });
-          if (surpriseStatusEl) surpriseStatusEl.textContent = MSG_TRY_AGAIN;
+          if (surpriseStatusEl) surpriseStatusEl.textContent = 'Network error while saving review.';
         })
         .finally(function () {
           save.disabled = false;
@@ -1252,9 +759,8 @@
       })
       .catch(function (err) {
         console.error('[Echofy] Spotify /api/spotify/recommend-by-genre fetch failed', err);
-        reportDiscover('discover.recommend_by_genre', err, {});
         surpriseResultEl.hidden = true;
-        surpriseStatusEl.textContent = MSG_TRY_AGAIN;
+        surpriseStatusEl.textContent = 'Network error while loading a genre pick.';
       })
       .finally(function () {
         if (surpriseBtn) {
@@ -1316,9 +822,8 @@
       })
       .catch(function (err) {
         console.error('[Echofy] Spotify /api/spotify/recommend-like fetch failed', err);
-        reportDiscover('discover.recommend_like', err, {});
         surpriseResultEl.hidden = true;
-        surpriseStatusEl.textContent = MSG_TRY_AGAIN;
+        surpriseStatusEl.textContent = 'Network error while loading a same-genre recommendation.';
       })
       .finally(function () {
         if (surpriseBtn) {
@@ -1328,19 +833,62 @@
       });
   }
 
-  if (btn && statusEl && resultsEl) {
-    btn.addEventListener('click', function () {
-      loadTopSpotifyMusic();
-    });
-    if (chartViewSelect) {
-      chartViewSelect.addEventListener('change', function () {
-        loadTopSpotifyMusic();
+  btn.addEventListener('click', function () {
+    if (!API_BASE) {
+      statusEl.textContent = 'API base URL is not configured for this host. Run the site locally with the Flask backend on port 5001.';
+      return;
+    }
+
+    setLoading(true);
+    statusEl.textContent = '';
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+
+    fetch(API_BASE + '/api/spotify/top-tracks', fetchOpts)
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      })
+      .then(function (_ref) {
+        var ok = _ref.ok;
+        var data = _ref.data;
+
+        console.log('[Echofy] Spotify /api/spotify/top-tracks', {
+          httpStatus: _ref.status,
+          ok: ok,
+          payload: data,
+          trackCount: data && data.tracks ? data.tracks.length : 0,
+        });
+
+        if (!ok) {
+          statusEl.textContent = apiErrorText(
+            data,
+            'Could not load Spotify data. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env and restart the backend.'
+          );
+          return;
+        }
+
+        var tracks = data.tracks || [];
+        if (!tracks.length) {
+          statusEl.textContent = 'Spotify returned no tracks.';
+          return;
+        }
+
+        currentItems = tracks;
+        statusEl.textContent = '';
+        renderItems(resultsEl, sourceLabel(data.source, data), tracks);
+        btn.setAttribute('aria-expanded', 'true');
+        refreshSaveButtons();
+      })
+      .catch(function (err) {
+        console.error('[Echofy] Spotify /api/spotify/top-tracks fetch failed', err);
+        statusEl.textContent = 'Network error. Is the backend running on http://127.0.0.1:5001 ?';
+      })
+      .finally(function () {
+        setLoading(false);
       });
-    }
-    if (API_BASE) {
-      loadTopSpotifyMusic();
-    }
-  }
+  });
 
   searchTypeButtons.forEach(function (typeBtn) {
     typeBtn.addEventListener('click', function () {
@@ -1360,7 +908,6 @@
   if (searchForm) {
     searchForm.addEventListener('submit', function (event) {
       event.preventDefault();
-      if (!searchStatusEl || !searchResultsEl || !searchInput) return;
       if (!API_BASE) {
         searchStatusEl.textContent = 'API base URL is not configured for this host.';
         return;
@@ -1406,8 +953,7 @@
         })
         .catch(function (err) {
           console.error('[Echofy] Spotify /api/spotify/search fetch failed', err);
-          reportDiscover('discover.spotify_search', err, { endpoint: '/api/spotify/search' });
-          searchStatusEl.textContent = MSG_TRY_AGAIN;
+          searchStatusEl.textContent = 'Network error while searching Spotify.';
         })
         .finally(function () {
           setSearchLoading(false);
@@ -1425,8 +971,7 @@
 
       var pool = currentItems.length ? currentItems : shortlist;
       if (!pool.length) {
-        surpriseStatusEl.textContent =
-          'Load charts (above), search Spotify, or search a genre first, then I can pick one.';
+        surpriseStatusEl.textContent = 'Load top Spotify music, search Spotify, or search a genre first, then I can pick one.';
         surpriseResultEl.hidden = true;
         return;
       }
@@ -1445,7 +990,7 @@
     });
   }
 
-  [resultsEl, searchResultsEl, surpriseResultEl, shortlistEl, playlistsEl].forEach(function (container) {
+  [resultsEl, searchResultsEl, surpriseResultEl, shortlistEl].forEach(function (container) {
     if (container) container.addEventListener('click', handleListClick);
   });
 

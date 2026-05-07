@@ -948,6 +948,7 @@ def search_spotify_for_response(
             400,
         )
 
+    user_token = (oauth_access_token or legacy_user_token or "").strip()
     token, token_source, token_error = _resolve_spotify_token(
         client_id=client_id,
         client_secret=client_secret,
@@ -986,38 +987,45 @@ def search_spotify_for_response(
     if kind in {"track", "album"} and market:
         params["market"] = market
 
-    res = requests.get(
-        f"{SPOTIFY_API}/search",
-        headers=_headers(token),
-        params=params,
-        timeout=_REQUEST_TIMEOUT,
-    )
+    def _run_search(active_token: str) -> requests.Response:
+        return requests.get(
+            f"{SPOTIFY_API}/search",
+            headers=_headers(active_token),
+            params=params,
+            timeout=_REQUEST_TIMEOUT,
+        )
+
+    res = _run_search(token)
     # Catalog search works with client credentials; expired user/session tokens should not break it.
     if res.status_code == 401 and token_source == "user":
         cid, csec = client_id.strip(), client_secret.strip()
         if cid and csec:
             cc_token, _cc_err = _get_client_credentials_token(cid, csec)
             if cc_token:
-                res = requests.get(
-                    f"{SPOTIFY_API}/search",
-                    headers=_headers(cc_token),
-                    params=params,
-                    timeout=_REQUEST_TIMEOUT,
-                )
+                res = _run_search(cc_token)
                 used_client_credentials_fallback = True
-
+    if res.status_code == 429 and token_source == "client" and user_token and user_token != token:
+        res = _run_search(user_token)
     if res.status_code != 200:
         try:
             detail = res.json().get("error", {}).get("message", "") or res.text[:200]
         except Exception:
             detail = res.text[:200]
+        retry_after = ""
+        if res.status_code == 429:
+            retry_after = (res.headers.get("Retry-After") or "").strip()
         return (
             {
                 "error": "spotify_search_error",
-                "message": "Could not search Spotify.",
+                "message": (
+                    "Spotify is rate limiting search right now. Try again in a moment."
+                    if res.status_code == 429
+                    else "Could not search Spotify."
+                ),
                 "detail": detail,
+                "retry_after": retry_after or None,
             },
-            502,
+            429 if res.status_code == 429 else 502,
         )
 
     bucket = res.json().get(f"{kind}s") or {}

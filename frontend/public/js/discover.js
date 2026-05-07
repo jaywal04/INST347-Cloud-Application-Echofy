@@ -389,7 +389,7 @@
   }
   if (oauthJustConnected && statusEl) {
     statusEl.textContent =
-      'Spotify connected. Charts load below (your top tracks when available; otherwise Last.fm matched to Spotify).';
+      'Spotify connected. Use “Your Top Tracks” to load your Spotify-only top tracks.';
   }
   if (oauthJustConnected && window.history && window.history.replaceState) {
     try {
@@ -613,7 +613,7 @@
     renderShortlist();
   }
 
-  var BTN_CHARTS_LABEL = 'Refresh charts';
+  var BTN_CHARTS_LABEL = 'Your Top Tracks';
 
   function setLoading(loading) {
     if (!btn) return;

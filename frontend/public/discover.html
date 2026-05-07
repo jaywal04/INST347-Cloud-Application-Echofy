@@ -27,21 +27,8 @@
 
     <section class="discover-panel">
       <div class="discover-panel-head">
-        <h2 class="section-title discover-panel-title">Charts</h2>
-        <p class="discover-panel-desc">Choose a chart source below. Auto uses your Spotify top tracks when you are connected (short-term, then medium-term), then Last.fm’s overall chart if Spotify has no tops yet. Other options are pure Last.fm feeds matched to Spotify on the server — set LAST_FM_API_KEY and Spotify app credentials in .env.</p>
-      </div>
-      <div class="discover-chart-view-row">
-        <label class="discover-chart-view-label" for="discover-chart-source">Chart source</label>
-        <select id="discover-chart-source" class="discover-chart-view-select" aria-describedby="discover-chart-source-hint">
-          <option value="auto">Auto (Spotify tops when connected, else Last.fm overall)</option>
-          <option value="spotify_personal">Your top tracks — Spotify only</option>
-          <option value="lastfm_tracks">Last.fm — Overall top tracks</option>
-          <option value="lastfm_artists">Last.fm — Top artists (#1 tracks)</option>
-          <option value="lastfm_geo">Last.fm — Top tracks in your country</option>
-        </select>
-        <p id="discover-chart-source-hint" class="discover-hint discover-chart-view-hint">
-          Reloads when you change selection. Country chart uses LAST_FM_GEO_COUNTRY in .env or maps SPOTIFY_MARKET on the server.
-        </p>
+        <h2 class="section-title discover-panel-title">Your Recent Spotify</h2>
+        <p class="discover-panel-desc">Connect your Spotify account to load your top tracks from Spotify only. Client ID, secret, and tokens stay on the server.</p>
       </div>
       <p class="discover-oauth-row">
         <a class="btn-ghost discover-connect-link" id="spotify-connect-link" href="#" hidden>Connect Spotify account</a>
@@ -49,7 +36,7 @@
         <button type="button" class="btn-ghost btn-sm" id="spotify-disconnect-btn" hidden>Disconnect Spotify</button>
       </p>
       <button type="button" class="btn-primary btn-spotify" id="btn-spotify-top" aria-expanded="false">
-        Refresh charts
+        Your Top Tracks
       </button>
       <p class="discover-hint" id="spotify-status" role="status"></p>
       <div class="spotify-results" id="spotify-results" hidden></div>

@@ -666,6 +666,13 @@
         }
 
         if (!ok) {
+          if (_ref.status === 429 || (data && data.error === 'spotify_rate_limited')) {
+            var ra = data && typeof data.retry_after === 'number' ? data.retry_after : null;
+            statusEl.textContent =
+              apiErrorText(data, '') +
+              (ra != null && ra > 0 ? ' Retry in about ' + ra + 's.' : '');
+            return;
+          }
           statusEl.textContent = apiErrorText(
             data,
             'Could not load charts. Set LAST_FM_API_KEY (or last_fm_api_key) plus SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env, connect Spotify for your own tops, and restart the backend.'
@@ -675,7 +682,10 @@
 
         var tracks = data.tracks || [];
         if (!tracks.length) {
-          statusEl.textContent = 'No tracks returned for this chart.';
+          statusEl.textContent =
+            (data.spotify_session_note && String(data.spotify_session_note).trim()) ||
+            (data.message && String(data.message).trim()) ||
+            'No tracks returned for this chart.';
           return;
         }
 

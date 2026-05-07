@@ -824,7 +824,8 @@ def _lastfm_variant_name_for_mode(mode: str) -> str:
 
 def _spotify_me_top_tracks_payload(access_token: str) -> tuple[dict[str, Any], int]:
     """
-    Spotify /me/top/tracks — try short_term then medium_term so light listeners still see results.
+    Spotify /me/top/tracks — try short_term, medium_term, then long_term.
+    Local files are omitted (same as catalog normalization); 429 is surfaced as rate limit, not token error.
     """
     tok = (access_token or "").strip()
     if not tok:
@@ -833,9 +834,11 @@ def _spotify_me_top_tracks_payload(access_token: str) -> tuple[dict[str, Any], i
             401,
         )
     headers = _headers(tok)
+    saw_items_all_local = False
     for time_range, label in (
         ("short_term", "last few weeks"),
         ("medium_term", "last ~6 months"),
+        ("long_term", "all-time (~years)"),
     ):
         me = requests.get(
             f"{SPOTIFY_API}/me/top/tracks",
@@ -843,8 +846,21 @@ def _spotify_me_top_tracks_payload(access_token: str) -> tuple[dict[str, Any], i
             params={"limit": 20, "time_range": time_range},
             timeout=_REQUEST_TIMEOUT,
         )
-        if me.status_code not in (200,):
-            err_status = me.status_code if me.status_code in (401, 403) else 502
+        if me.status_code == 429:
+            retry_raw = (me.headers.get("Retry-After") or "").strip()
+            retry_after = int(retry_raw) if retry_raw.isdigit() else None
+            body: dict[str, Any] = {
+                "error": "spotify_rate_limited",
+                "message": (
+                    "Spotify rate limit: too many requests. Wait a moment and reload, "
+                    "or try again in a few minutes."
+                ),
+                "status": 429,
+            }
+            if retry_after is not None:
+                body["retry_after"] = retry_after
+            return body, 429
+        if me.status_code in (401, 403):
             return (
                 {
                     "error": "invalid_user_token",
@@ -854,13 +870,25 @@ def _spotify_me_top_tracks_payload(access_token: str) -> tuple[dict[str, Any], i
                     ),
                     "status": me.status_code,
                 },
-                err_status,
+                me.status_code,
             )
+        if me.status_code != 200:
+            return (
+                {
+                    "error": "spotify_api_error",
+                    "message": f"Spotify top tracks request failed (HTTP {me.status_code}). Try again later.",
+                    "status": me.status_code,
+                },
+                502,
+            )
+        raw_items = me.json().get("items") or []
         tracks = []
-        for item in me.json().get("items") or []:
+        for item in raw_items:
             t = _normalize_track(item)
             if t:
                 tracks.append(t)
+        if raw_items and not tracks:
+            saw_items_all_local = True
         if tracks:
             return (
                 {
@@ -870,14 +898,21 @@ def _spotify_me_top_tracks_payload(access_token: str) -> tuple[dict[str, Any], i
                 },
                 200,
             )
+    if saw_items_all_local:
+        note = (
+            "Spotify returned top tracks, but they are local files only — Echofy shows catalog "
+            "tracks here. Stream from Spotify (or pick a Last.fm chart) to see a list."
+        )
+    else:
+        note = (
+            "No catalog top tracks from Spotify for short, medium, or long term yet — listen more, "
+            "or pick a Last.fm chart source above."
+        )
     return (
         {
             "source": "your_top_tracks",
             "tracks": [],
-            "spotify_session_note": (
-                "No top tracks from Spotify for short or medium term yet — listen more, "
-                "or pick a Last.fm chart source above."
-            ),
+            "spotify_session_note": note,
         },
         200,
     )
@@ -906,7 +941,7 @@ def _legacy_user_then_playlist(
     client_id: str = "",
     client_secret: str = "",
 ) -> tuple[dict[str, Any], int]:
-    """Auto: Spotify personalized tops (short then medium term), else Last.fm overall top tracks."""
+    """Auto: Spotify personalized tops (short, medium, long term), else Last.fm overall top tracks."""
     payload, status = _spotify_me_top_tracks_payload(user_token)
     if status != 200:
         return payload, status
@@ -915,7 +950,8 @@ def _legacy_user_then_playlist(
 
     cid, csec = client_id.strip(), client_secret.strip()
     note_extra = (
-        " Showing Last.fm because Spotify returned no personalized top tracks in short or medium term."
+        " Showing Last.fm because Spotify returned no catalog personalized top tracks "
+        "(short, medium, or long term)."
     )
     if cid and csec:
         cc_token, _cc_err = _get_client_credentials_token(cid, csec)
@@ -964,8 +1000,8 @@ def fetch_top_tracks_for_response(
     """
     Chart behavior is selected with ``chart_mode`` (HTTP ``chart=` query):
 
-    - **auto** — Personalized Spotify tops when logged in (short_term then medium_term); else Last.fm overall.
-    - **spotify_personal** — Only your Spotify top tracks (no Last.fm fallback on the server).
+    - **auto** — Personalized Spotify tops when logged in (short_term, medium_term, long_term catalog tracks); else Last.fm overall.
+    - **spotify_personal** — Only your Spotify top tracks (no Last.fm fallback on the server). HTTP 429 from Spotify maps to `{ "error": "spotify_rate_limited" }` (not confused with expired token).
     - **lastfm_tracks** / **lastfm_artists** / **lastfm_geo** — That Last.fm chart, matched to Spotify.
     """
     mode = _normalize_chart_mode(chart_mode)

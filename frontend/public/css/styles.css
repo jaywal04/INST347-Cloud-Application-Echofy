@@ -400,6 +400,32 @@ section {
 .star.empty { color: var(--text-dim); }
 
 /* RECENT REVIEWS */
+.recent-reviews-wrap {
+  position: relative;
+}
+
+.recent-reviews-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 180px;
+  background: linear-gradient(to bottom, transparent, #080d1a);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 1.5rem;
+  text-decoration: none;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 0 0 4px 4px;
+}
+
+.recent-reviews-fade:hover {
+  color: var(--green);
+}
+
 .reviews-list {
   display: flex;
   flex-direction: column;

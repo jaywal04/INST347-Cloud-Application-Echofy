@@ -52,11 +52,14 @@
   <section>
     <div class="section-header">
       <h2 class="section-title">Recent Reviews</h2>
-      <a href="#" class="section-link">See all →</a>
+      <a href="/review" class="section-link">See all →</a>
     </div>
 
     <p id="recent-reviews-empty" style="color:var(--text-muted);padding:1rem 0;" hidden>No reviews yet — be the first!</p>
-    <div class="reviews-list" id="recent-reviews-list"></div>
+    <div class="recent-reviews-wrap">
+      <div class="reviews-list" id="recent-reviews-list"></div>
+      <a href="/review" class="recent-reviews-fade" id="recent-reviews-fade" hidden>See all reviews →</a>
+    </div>
   </section>
 
   <!-- STATS -->

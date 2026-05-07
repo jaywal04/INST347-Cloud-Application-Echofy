@@ -70,6 +70,10 @@
     }
     if (emptyEl) emptyEl.hidden = true;
 
+    var MAX_HOME = 5;
+    var showFade = reviews.length > MAX_HOME;
+    reviews = reviews.slice(0, MAX_HOME);
+
     reviews.forEach(function (r, idx) {
       var item = r.item || {};
       var initials = (r.username || '?').substring(0, 2).toUpperCase();
@@ -113,6 +117,9 @@
       card.appendChild(bodyDiv);
       list.appendChild(card);
     });
+
+    var fadeEl = document.getElementById('recent-reviews-fade');
+    if (fadeEl) fadeEl.hidden = !showFade;
   }
 
   var statsItemsEl   = document.getElementById('stat-items-rated');

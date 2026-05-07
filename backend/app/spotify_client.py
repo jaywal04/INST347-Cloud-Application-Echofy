@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
 from typing import Any
 
 import requests
@@ -19,7 +18,6 @@ USA_TOP_50_PLAYLIST = "37i9dQZEVXbLRQDuF5jeBp"
 VIRAL_50_GLOBAL_PLAYLIST = "37i9dQZEVXbLiRSasKsNU9"
 VIRAL_50_USA_PLAYLIST = "37i9dQZEVXbKuaTI1Z1Afx"
 
-# Keys match GET /api/spotify/top-tracks?view=<key> (hyphens normalized to underscores).
 CHART_PLAYLIST_VIEWS: dict[str, tuple[str, str]] = {
     "global": (GLOBAL_TOP_50_PLAYLIST, "global_top_50"),
     "usa": (USA_TOP_50_PLAYLIST, "usa_top_50"),
@@ -29,12 +27,10 @@ CHART_PLAYLIST_VIEWS: dict[str, tuple[str, str]] = {
 
 _REFRESH_MARGIN_SEC = 60
 _REQUEST_TIMEOUT = 20
-# Spotify GET /v1/search: limit must be 0–10 (inclusive). Values above 10 return "Invalid limit".
-_SPOTIFY_SEARCH_MAX_LIMIT = 10
 _SEARCH_LIMIT = 10
 _GENRE_RESULT_LIMIT = 12
 _GENRE_RECOMMENDATION_LIMIT = 50
-_GENRE_ARTIST_SEARCH_LIMIT = 10
+_GENRE_ARTIST_SEARCH_LIMIT = 12
 _GENRE_TRACKS_PER_ARTIST = 8
 _GENRE_SEEDS = (
     "afrobeat",
@@ -121,15 +117,53 @@ _cc_lock = threading.Lock()
 _cc_access_token: str | None = None
 _cc_expires_at_monotonic: float = 0.0
 _cc_client_key: tuple[str, str] | None = None
+_chart_cache_lock = threading.Lock()
+_chart_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_CHART_CACHE_TTL_SEC = 600
+
+
+def _is_rate_limited(detail: str) -> bool:
+    return "too many requests" in str(detail or "").strip().lower()
+
+
+def _cache_chart_payload(cache_key: str, payload: dict[str, Any]) -> None:
+    if not cache_key or not payload or not payload.get("tracks"):
+        return
+    with _chart_cache_lock:
+        _chart_cache[cache_key] = (
+            time.monotonic() + _CHART_CACHE_TTL_SEC,
+            dict(payload),
+        )
+
+
+def _cached_chart_payload(cache_key: str, note: str) -> tuple[dict[str, Any], int] | None:
+    if not cache_key:
+        return None
+    now = time.monotonic()
+    with _chart_cache_lock:
+        entry = _chart_cache.get(cache_key)
+        if not entry:
+            return None
+        expires_at, payload = entry
+        if now >= expires_at:
+            _chart_cache.pop(cache_key, None)
+            return None
+    cached = dict(payload)
+    existing_note = str(cached.get("spotify_session_note") or "").strip()
+    if existing_note:
+        cached["spotify_session_note"] = f"{existing_note} Cached fallback: {note}"
+    else:
+        cached["spotify_session_note"] = f"Cached fallback: {note}"
+    cached["cached"] = True
+    return cached, 200
 
 
 def _headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token.strip()}"}
 
 
-def _normalize_catalog_track(item: dict[str, Any]) -> dict[str, Any] | None:
-    """Map a Spotify track object to Echofy item shape (non-local, catalog)."""
-    if not item:
+def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
+    if not item or item.get("is_local"):
         return None
     album = item.get("album") or {}
     images = album.get("images") or []
@@ -143,51 +177,6 @@ def _normalize_catalog_track(item: dict[str, Any]) -> dict[str, Any] | None:
         "image": image_url,
         "url": (item.get("external_urls") or {}).get("spotify"),
     }
-
-
-def _normalize_track(item: dict[str, Any]) -> dict[str, Any] | None:
-    if not item or item.get("is_local"):
-        return None
-    return _normalize_catalog_track(item)
-
-
-def _normalize_playlist_track_item(item: dict[str, Any]) -> dict[str, Any] | None:
-    """
-    Normalize a `track` object from GET /playlists/{id}/items rows (may be track, episode,
-    local file, or null if removed).
-    """
-    if not item:
-        return None
-    if item.get("type") == "episode":
-        show = item.get("show") or {}
-        images = item.get("images") or []
-        image_url = next((img.get("url") for img in images if img.get("url")), None)
-        pub = (show.get("publisher") or "").strip()
-        show_name = (show.get("name") or "Podcast").strip()
-        artists = [pub] if pub else [show_name]
-        return {
-            "type": "episode",
-            "name": item.get("name") or "Episode",
-            "artists": artists,
-            "album": f"{show_name} · Episode",
-            "image": image_url,
-            "url": (item.get("external_urls") or {}).get("spotify"),
-        }
-    if item.get("is_local"):
-        album = item.get("album") or {}
-        images = album.get("images") or []
-        image_url = next((img.get("url") for img in images if img.get("url")), None)
-        artists = [a.get("name", "") for a in item.get("artists") or [] if a.get("name")]
-        return {
-            "type": "track",
-            "name": item.get("name") or "Local file",
-            "artists": artists if artists else ["Local"],
-            "album": (album.get("name") or "").strip() or "This device",
-            "image": image_url,
-            "url": (item.get("external_urls") or {}).get("spotify"),
-            "is_local": True,
-        }
-    return _normalize_catalog_track(item)
 
 
 def _normalize_new_release_album(album: dict[str, Any]) -> dict[str, Any] | None:
@@ -374,36 +363,16 @@ def _resolve_spotify_token(
 def _playlist_tracks_payload(
     access_token: str, playlist_id: str, *, market: str | None
 ) -> tuple[list[dict[str, Any]] | None, str]:
-    """Returns (tracks_list, error_detail). tracks_list None if request failed or empty.
-
-    ``market=None`` means omit the ``market`` query parameter (Spotify chart + client
-    credentials often return 403 Forbidden when a market is forced). A non-None string
-    uses that ISO market if valid, otherwise ``SPOTIFY_MARKET`` / default.
-    """
-    base_params: dict[str, Any] = {
-        "limit": 30,
-        "additional_types": "episode,track",
-    }
-    params = dict(base_params)
-    if market is not None:
-        m = (market or "").strip().upper()
-        if len(m) != 2 or not m.isalpha():
-            m = _spotify_iso_market()
-        if len(m) == 2 and m.isalpha():
-            params["market"] = m
-
-    def _get(pl_params: dict[str, Any]) -> requests.Response:
-        return requests.get(
-            f"{SPOTIFY_API}/playlists/{playlist_id}/items",
-            headers=_headers(access_token),
-            params=pl_params,
-            timeout=_REQUEST_TIMEOUT,
-        )
-
-    pl = _get(params)
-    if pl.status_code == 403 and "market" in params:
-        pl = _get(dict(base_params))
-
+    """Returns (tracks_list, error_detail). tracks_list None if request failed or empty."""
+    params: dict[str, Any] = {"limit": 30}
+    if market:
+        params["market"] = market
+    pl = requests.get(
+        f"{SPOTIFY_API}/playlists/{playlist_id}/tracks",
+        headers=_headers(access_token),
+        params=params,
+        timeout=_REQUEST_TIMEOUT,
+    )
     if pl.status_code != 200:
         try:
             detail = pl.json().get("error", {}).get("message", "") or pl.text[:200]
@@ -413,7 +382,7 @@ def _playlist_tracks_payload(
 
     tracks = []
     for row in pl.json().get("items") or []:
-        t = _normalize_playlist_track_item(row.get("track") or {})
+        t = _normalize_track(row.get("track") or {})
         if t:
             tracks.append(t)
     return (tracks if tracks else None), ""
@@ -466,131 +435,20 @@ def _get_client_credentials_token(client_id: str, client_secret: str) -> tuple[s
         return token, ""
 
 
-def refresh_spotify_user_access_token(
-    client_id: str,
-    client_secret: str,
-    refresh_token: str,
-) -> tuple[str | None, str | None, str]:
-    """
-    Exchange a refresh token for a new access token.
-    Returns (access_token, new_refresh_token_or_none, error_message).
-    error_message is empty on success.
-    """
-    rt = (refresh_token or "").strip()
-    cid, csec = (client_id or "").strip(), (client_secret or "").strip()
-    if not rt or not cid or not csec:
-        return None, None, "missing_refresh_credentials"
-
-    r = requests.post(
-        SPOTIFY_TOKEN_URL,
-        data={"grant_type": "refresh_token", "refresh_token": rt},
-        auth=(cid, csec),
-        timeout=_REQUEST_TIMEOUT,
-    )
-    if r.status_code != 200:
-        try:
-            detail = r.json().get("error_description") or r.json().get("error", "")
-        except Exception:
-            detail = ""
-        return None, None, detail or r.text[:300] or f"HTTP {r.status_code}"
-
-    data = r.json()
-    access = data.get("access_token")
-    if not access or not isinstance(access, str):
-        return None, None, "refresh response missing access_token"
-
-    new_refresh = data.get("refresh_token")
-    if isinstance(new_refresh, str) and new_refresh.strip():
-        return access.strip(), new_refresh.strip(), ""
-
-    return access.strip(), None, ""
-
-
-def _spotify_iso_market() -> str:
-    """Spotify expects a 2-letter ISO market; bad values (e.g. 'USA') can break search."""
-    m = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US").strip().upper()
-    if len(m) == 2 and m.isalpha():
-        return m
-    return "US"
-
-
-def _search_tracks_client_fallback(
-    access_token: str, market: str
-) -> tuple[list[dict[str, Any]] | None, str]:
-    """When browse/chart endpoints fail, track search usually still works (client credentials)."""
-    m = (market or "").strip().upper()
-    if len(m) != 2 or not m.isalpha():
-        m = "US"
-
-    queries = (
-        "genre:pop",
-        "genre:hip-hop",
-        "genre:rock",
-        "year:2024",
-        "pop",
-        "hip hop",
-        "rock",
-    )
-
-    def run(with_market: bool) -> tuple[list[dict[str, Any]] | None, str]:
-        last_local = ""
-        for q in queries:
-            params: dict[str, Any] = {
-                "q": q,
-                "type": "track",
-                "limit": _SPOTIFY_SEARCH_MAX_LIMIT,
-            }
-            if with_market:
-                params["market"] = m
-            res = requests.get(
-                f"{SPOTIFY_API}/search",
-                headers=_headers(access_token),
-                params=params,
-                timeout=_REQUEST_TIMEOUT,
-            )
-            if res.status_code != 200:
-                try:
-                    body = res.json()
-                    err = body.get("error") or {}
-                    last_local = (
-                        str(err.get("message", "") or err.get("reason", "") or "").strip()
-                        or res.text[:160]
-                        or f"HTTP {res.status_code}"
-                    ).strip()
-                except Exception:
-                    last_local = (res.text[:160] or f"HTTP {res.status_code}").strip()
-                continue
-            tracks: list[dict[str, Any]] = []
-            for raw in (res.json().get("tracks") or {}).get("items") or []:
-                t = _normalize_track(raw)
-                if t:
-                    tracks.append(t)
-            if tracks:
-                return tracks, ""
-        return None, last_local
-
-    tracks, err = run(True)
-    if tracks:
-        return tracks, ""
-    tracks, err2 = run(False)
-    if tracks:
-        return tracks, ""
-    tail = (err2 or err or "track search returned no usable results").strip()
-    return None, tail
-
-
 def _playlist_tracks_market_fallback(
     access_token: str, playlist_id: str
 ) -> tuple[list[dict[str, Any]] | None, str]:
-    """Try playlist tracks with account market, then without market (chart + client creds)."""
+    """Try playlist tracks with the configured market, then without one."""
     last_detail = ""
-    market = _spotify_iso_market()
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
     market_attempts: list[str | None] = []
     if market:
         market_attempts.append(market)
     market_attempts.append(None)
-    for m in market_attempts:
-        tracks, err = _playlist_tracks_payload(access_token, playlist_id, market=m)
+    for current_market in market_attempts:
+        tracks, err = _playlist_tracks_payload(
+            access_token, playlist_id, market=current_market
+        )
         if tracks:
             return tracks, ""
         if err:
@@ -630,18 +488,23 @@ def fetch_curated_chart_for_response(
     client_secret: str = "",
     legacy_user_token: str = "",
     oauth_access_token: str = "",
-    oauth_refresh_token: str = "",
-    on_token_refresh: Callable[[str, str | None], None] | None = None,
 ) -> tuple[dict[str, Any], int]:
-    """Load a specific editorial chart or new releases (not the /me/top/tracks personalized path)."""
+    """Load a specific Spotify chart or new releases feed for Discover."""
     key = (chart_view or "").strip().lower().replace("-", "_")
     cid, csec = client_id.strip(), client_secret.strip()
+    user_token = (oauth_access_token or legacy_user_token or "").strip()
+    cache_key = f"chart:{key}"
 
     def _fallback_payload(reason: str) -> tuple[dict[str, Any], int]:
         fallback_payload, fallback_status = fetch_public_chart(token)
         if fallback_status == 200:
             fallback_payload["chart_view"] = key
             fallback_payload["spotify_session_note"] = reason
+            _cache_chart_payload(cache_key, fallback_payload)
+            return fallback_payload, fallback_status
+        cached = _cached_chart_payload(cache_key, reason)
+        if cached:
+            return cached
         return fallback_payload, fallback_status
 
     def _token_for_charts() -> tuple[str | None, tuple[dict[str, Any], int] | None]:
@@ -656,7 +519,6 @@ def fetch_curated_chart_for_response(
                 },
                 502,
             )
-
 
         user = (oauth_access_token or legacy_user_token or "").strip()
         if not user:
@@ -679,16 +541,22 @@ def fetch_curated_chart_for_response(
 
     if key == "new_releases":
         tracks, detail = _new_releases_tracks(token)
+        if (
+            not tracks
+            and _is_rate_limited(detail)
+            and user_token
+            and user_token != token
+        ):
+            tracks, detail = _new_releases_tracks(user_token)
         if tracks:
-            return (
-                {
-                    "source": "new_releases",
-                    "tracks": tracks,
-                    "chart_view": key,
-                    "spotify_session_note": "Spotify new releases in your browse market.",
-                },
-                200,
-            )
+            payload = {
+                "source": "new_releases",
+                "tracks": tracks,
+                "chart_view": key,
+                "spotify_session_note": "Spotify new releases in your browse market.",
+            }
+            _cache_chart_payload(cache_key, payload)
+            return payload, 200
         return _fallback_payload(
             "Spotify blocked the requested new-releases feed for this session. Showing an available Spotify chart instead."
         )
@@ -706,22 +574,28 @@ def fetch_curated_chart_for_response(
 
     playlist_id, source_key = playlist_info
     tracks, last_err = _playlist_tracks_market_fallback(token, playlist_id)
+    if (
+        not tracks
+        and _is_rate_limited(last_err)
+        and user_token
+        and user_token != token
+    ):
+        tracks, last_err = _playlist_tracks_market_fallback(user_token, playlist_id)
     if tracks:
         notes = {
-            "global_top_50": "Spotify’s Global Top 50 (daily chart).",
-            "usa_top_50": "Spotify’s Top 50 — USA.",
-            "viral_50_global": "Spotify’s Viral 50 — Global.",
-            "viral_50_usa": "Spotify’s Viral 50 — USA.",
+            "global_top_50": "Spotify's Global Top 50 (daily chart).",
+            "usa_top_50": "Spotify's Top 50 - USA.",
+            "viral_50_global": "Spotify's Viral 50 - Global.",
+            "viral_50_usa": "Spotify's Viral 50 - USA.",
         }
-        return (
-            {
-                "source": source_key,
-                "tracks": tracks,
-                "chart_view": key,
-                "spotify_session_note": notes.get(source_key, ""),
-            },
-            200,
-        )
+        payload = {
+            "source": source_key,
+            "tracks": tracks,
+            "chart_view": key,
+            "spotify_session_note": notes.get(source_key, ""),
+        }
+        _cache_chart_payload(cache_key, payload)
+        return payload, 200
 
     reason = "Spotify blocked that requested chart for this session. Showing an available Spotify chart instead."
     if last_err:
@@ -737,17 +611,45 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
     """
     last_detail = ""
 
-    tracks, err = _playlist_tracks_market_fallback(access_token, GLOBAL_TOP_50_PLAYLIST)
-    if tracks:
-        return ({"source": "global_top_50", "tracks": tracks}, 200)
-    if err:
-        last_detail = err
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
 
-    nr_tracks, nr_detail = _new_releases_tracks(access_token)
-    if nr_tracks:
-        return ({"source": "new_releases", "tracks": nr_tracks}, 200)
-    if nr_detail:
-        last_detail = nr_detail
+    market_attempts: list[str | None] = []
+    if market:
+        market_attempts.append(market)
+    market_attempts.append(None)
+
+    for m in market_attempts:
+        tracks, err = _playlist_tracks_payload(
+            access_token, GLOBAL_TOP_50_PLAYLIST, market=m
+        )
+        if tracks:
+            payload = {"source": "global_top_50", "tracks": tracks}
+            _cache_chart_payload("chart:public", payload)
+            return payload, 200
+        if err:
+            last_detail = err
+
+    nr = requests.get(
+        f"{SPOTIFY_API}/browse/new-releases",
+        headers=_headers(access_token),
+        params={"limit": 20},
+        timeout=_REQUEST_TIMEOUT,
+    )
+    if nr.status_code == 200:
+        tracks = []
+        for album in nr.json().get("albums", {}).get("items") or []:
+            row = _normalize_new_release_album(album)
+            if row:
+                tracks.append(row)
+        if tracks:
+            payload = {"source": "new_releases", "tracks": tracks}
+            _cache_chart_payload("chart:public", payload)
+            return payload, 200
+    else:
+        try:
+            last_detail = nr.json().get("error", {}).get("message", "") or nr.text[:200]
+        except Exception:
+            last_detail = nr.text[:200]
 
     feat = requests.get(
         f"{SPOTIFY_API}/browse/featured-playlists",
@@ -763,14 +665,13 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
                 continue
             tracks, err = _playlist_tracks_payload(access_token, pid, market=None)
             if tracks:
-                return (
-                    {
-                        "source": "featured_playlist",
-                        "tracks": tracks,
-                        "playlist_name": pname,
-                    },
-                    200,
-                )
+                payload = {
+                    "source": "featured_playlist",
+                    "tracks": tracks,
+                    "playlist_name": pname,
+                }
+                _cache_chart_payload("chart:public", payload)
+                return payload, 200
             if err:
                 last_detail = err
     else:
@@ -779,15 +680,15 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
         except Exception:
             last_detail = feat.text[:200]
 
-    st_tracks, st_err = _search_tracks_client_fallback(access_token, "")
-    if st_tracks:
-        return ({"source": "search_explore", "tracks": st_tracks}, 200)
-    if st_err:
-        last_detail = st_err
-
     msg = "Could not load music from Spotify."
     if last_detail:
         msg = f"{msg} Last error: {last_detail}"
+    cached = _cached_chart_payload(
+        "chart:public",
+        "Spotify rate limited the live chart feed, so Echofy is showing a recent chart snapshot.",
+    )
+    if cached and _is_rate_limited(last_detail):
+        return cached
     return (
         {
             "error": "spotify_api_error",
@@ -798,16 +699,8 @@ def fetch_public_chart(access_token: str) -> tuple[dict[str, Any], int]:
     )
 
 
-def _legacy_user_then_playlist(
-    user_token: str,
-    *,
-    client_id: str = "",
-    client_secret: str = "",
-) -> tuple[dict[str, Any], int]:
-    """Try /me/top/tracks first. If /me succeeds but there are no tracks, prefer a
-    **client-credentials** public chart — the same chart calls often return **403
-    Forbidden** when called with a **user** OAuth token (licensing / catalog rules).
-    """
+def _legacy_user_then_playlist(user_token: str) -> tuple[dict[str, Any], int]:
+    """Try /me/top/tracks, then Global Top 50 using the same user token (only if /me succeeds)."""
     headers = _headers(user_token)
 
     me = requests.get(
@@ -818,14 +711,13 @@ def _legacy_user_then_playlist(
     )
     if me.status_code not in (200,):
         # Do not call the Web API with an invalid/expired user token (would yield 502).
-        err_status = me.status_code if me.status_code in (401, 403) else 502
         return (
             {
                 "error": "invalid_user_token",
                 "message": "Spotify user token is missing, expired, or lacks user-top-read. Use Connect Spotify or set Client ID + Secret for the chart.",
                 "status": me.status_code,
             },
-            err_status,
+            401,
         )
 
     tracks = []
@@ -836,18 +728,6 @@ def _legacy_user_then_playlist(
     if tracks:
         return ({"source": "your_top_tracks", "tracks": tracks}, 200)
 
-    cid, csec = client_id.strip(), client_secret.strip()
-    if cid and csec:
-        cc_token, _cc_err = _get_client_credentials_token(cid, csec)
-        if cc_token:
-            chart_payload, chart_status = fetch_public_chart(cc_token)
-            if chart_status == 200:
-                chart_payload["spotify_session_note"] = (
-                    "No personalized top tracks in this window yet (or Spotify returned none we "
-                    "can display). Showing a public chart instead."
-                )
-                return chart_payload, chart_status
-
     return fetch_public_chart(user_token.strip())
 
 
@@ -856,33 +736,16 @@ def fetch_top_tracks_for_response(
     client_secret: str = "",
     legacy_user_token: str = "",
     oauth_access_token: str = "",
-    oauth_refresh_token: str = "",
-    on_token_refresh: Callable[[str, str | None], None] | None = None,
 ) -> tuple[dict[str, Any], int]:
     """
     Prefer a connected Spotify user token for personalized top tracks.
-    Refreshes the access token when Spotify returns 401/403 and a refresh token is available.
-    Falls back to Client Credentials for a public chart when no user token is available,
-    or when the user token cannot load /me/top/tracks even after refresh.
+    Fall back to Client Credentials for a public chart only when no user token is available.
     """
     user = (oauth_access_token or legacy_user_token or "").strip()
     cid, csec = client_id.strip(), client_secret.strip()
-    refresh_tok = (oauth_refresh_token or "").strip()
-    used_oauth = bool((oauth_access_token or "").strip())
 
     if user:
-        payload, status = _legacy_user_then_playlist(
-            user, client_id=cid, client_secret=csec
-        )
-        if status in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
-            new_access, new_refresh, err = refresh_spotify_user_access_token(
-                cid, csec, refresh_tok
-            )
-            if new_access:
-                on_token_refresh(new_access, new_refresh)
-                payload, status = _legacy_user_then_playlist(
-                    new_access, client_id=cid, client_secret=csec
-                )
+        payload, status = _legacy_user_then_playlist(user)
         if status in (401, 403) and cid and csec:
             token, err = _get_client_credentials_token(cid, csec)
             if token:
@@ -893,6 +756,7 @@ def fetch_top_tracks_for_response(
                         "user-top-read). Showing a public Spotify chart instead — use "
                         "Connect Spotify again for your own top tracks."
                     )
+                    chart_payload["spotify_session_stale"] = True
                     return chart_payload, chart_status
         return payload, status
 
@@ -948,17 +812,28 @@ def search_spotify_for_response(
             400,
         )
 
-    user_token = (oauth_access_token or legacy_user_token or "").strip()
-    token, token_source, token_error = _resolve_spotify_token(
-        client_id=client_id,
-        client_secret=client_secret,
-        legacy_user_token=legacy_user_token,
-        oauth_access_token=oauth_access_token,
-        prefer_client=True,
-    )
-    if token_error:
-        return token_error
+    oauth_user_token = (oauth_access_token or "").strip()
+    legacy_user_token = (legacy_user_token or "").strip()
+    client_token = ""
+    client_error = ""
+    cid, csec = client_id.strip(), client_secret.strip()
+    if cid and csec:
+        client_token, client_error = _get_client_credentials_token(cid, csec)
+
+    if not oauth_user_token and not client_token and legacy_user_token:
+        oauth_user_token = legacy_user_token
+
+    token = oauth_user_token or client_token
+    token_source = "user" if oauth_user_token else ("client" if client_token else None)
     if not token:
+        if client_error:
+            return (
+                {
+                    "error": "token_error",
+                    "message": client_error,
+                },
+                502,
+            )
         return (
             {
                 "error": "missing_credentials",
@@ -966,8 +841,6 @@ def search_spotify_for_response(
             },
             503,
         )
-
-    used_client_credentials_fallback = False
 
     if kind == "genre":
         needle = q.lower()
@@ -983,7 +856,7 @@ def search_spotify_for_response(
         )
 
     params: dict[str, Any] = {"q": q, "type": kind, "limit": _SEARCH_LIMIT}
-    market = _spotify_iso_market()
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
     if kind in {"track", "album"} and market:
         params["market"] = market
 
@@ -996,16 +869,11 @@ def search_spotify_for_response(
         )
 
     res = _run_search(token)
-    # Catalog search works with client credentials; expired user/session tokens should not break it.
-    if res.status_code == 401 and token_source == "user":
-        cid, csec = client_id.strip(), client_secret.strip()
-        if cid and csec:
-            cc_token, _cc_err = _get_client_credentials_token(cid, csec)
-            if cc_token:
-                res = _run_search(cc_token)
-                used_client_credentials_fallback = True
-    if res.status_code == 429 and token_source == "client" and user_token and user_token != token:
-        res = _run_search(user_token)
+    if res.status_code in (401, 403) and token_source == "user" and client_token and client_token != token:
+        res = _run_search(client_token)
+        token_source = "client"
+    if res.status_code == 429 and token_source == "client" and oauth_user_token and oauth_user_token != token:
+        res = _run_search(oauth_user_token)
     if res.status_code != 200:
         try:
             detail = res.json().get("error", {}).get("message", "") or res.text[:200]
@@ -1035,255 +903,15 @@ def search_spotify_for_response(
         if item:
             items.append(item)
 
-    payload: dict[str, Any] = {
-        "source": "spotify_search",
-        "query": q,
-        "type": kind,
-        "items": items,
-    }
-    if used_client_credentials_fallback:
-        payload["spotify_session_note"] = (
-            "Your Spotify login expired; search used the app catalog instead. "
-            "Open Discover and use Connect Spotify if you want a fresh session."
-        )
-    return (payload, 200)
-
-
-def _get_playlist_items_first_page(
-    playlist_id: str, access_token: str, page_limit: int
-) -> requests.Response:
-    """GET /v1/playlists/{id}/items (current API; /tracks is legacy)."""
-    url = f"{SPOTIFY_API}/playlists/{playlist_id}/items"
-    base: dict[str, Any] = {
-        "limit": min(100, max(1, page_limit)),
-        "additional_types": "episode,track",
-    }
-    params = dict(base)
-    m = _spotify_iso_market()
-    if len(m) == 2 and m.isalpha():
-        params["market"] = m
-    res = requests.get(
-        url,
-        headers=_headers(access_token),
-        params=params,
-        timeout=_REQUEST_TIMEOUT,
+    return (
+        {
+            "source": "spotify_search",
+            "query": q,
+            "type": kind,
+            "items": items,
+        },
+        200,
     )
-    if res.status_code == 403 and "market" in params:
-        res = requests.get(
-            url,
-            headers=_headers(access_token),
-            params=dict(base),
-            timeout=_REQUEST_TIMEOUT,
-        )
-    return res
-
-
-def fetch_playlist_tracks_for_response(
-    oauth_access_token: str = "",
-    playlist_id: str = "",
-    limit: int = 500,
-    oauth_refresh_token: str = "",
-    client_id: str = "",
-    client_secret: str = "",
-    on_token_refresh: Callable[[str, str | None], None] | None = None,
-) -> tuple[dict[str, Any], int]:
-    """Fetch up to `limit` playlist items (tracks/episodes) via GET /playlists/{id}/items."""
-    token = (oauth_access_token or "").strip()
-    pid = (playlist_id or "").strip()
-    if not token:
-        return ({"error": "no_user_token", "message": "Connect your Spotify account first."}, 401)
-    if not pid:
-        return ({"error": "missing_playlist_id", "message": "Playlist ID is required."}, 400)
-
-    cap = min(max(1, limit), 1000)
-    refresh_tok = (oauth_refresh_token or "").strip()
-    cid, csec = client_id.strip(), client_secret.strip()
-    used_oauth = bool((oauth_access_token or "").strip())
-
-    active_token = token
-    res = _get_playlist_items_first_page(pid, active_token, min(100, cap))
-
-    if res.status_code in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
-        new_access, new_refresh, _err = refresh_spotify_user_access_token(
-            cid, csec, refresh_tok
-        )
-        if new_access:
-            on_token_refresh(new_access, new_refresh)
-            active_token = new_access
-            res = _get_playlist_items_first_page(pid, active_token, min(100, cap))
-
-    if res.status_code == 401:
-        return ({"error": "token_expired", "message": "Spotify session expired. Reconnect your account."}, 401)
-    if res.status_code == 403:
-        detail = ""
-        try:
-            err = res.json().get("error") or {}
-            detail = (err.get("message") or "").strip()
-        except Exception:
-            detail = (res.text or "")[:200]
-        low = detail.lower()
-        if "scope" in low:
-            return (
-                {
-                    "error": "insufficient_scope",
-                    "message": "Missing Spotify permission. Disconnect and reconnect Spotify to approve all requested scopes.",
-                    "detail": detail,
-                },
-                403,
-            )
-        generic = not detail or detail.lower() == "forbidden"
-        return (
-            {
-                "error": "spotify_forbidden",
-                "message": (
-                    "Spotify blocked this playlist’s tracks. You must own the playlist or be a "
-                    "collaborator (Spotify no longer exposes full track lists for playlists you only "
-                    "follow). If it is yours, disconnect and reconnect Spotify so the token includes "
-                    "user-read-private (account country) and playlist scopes."
-                    if generic
-                    else detail
-                ),
-                "detail": detail,
-            },
-            403,
-        )
-    if res.status_code == 404:
-        return ({"error": "not_found", "message": "Playlist not found or is private."}, 404)
-    if res.status_code != 200:
-        try:
-            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
-        except Exception:
-            detail = res.text[:200]
-        return ({"error": "spotify_api_error", "message": "Could not load playlist tracks.", "detail": detail}, 502)
-
-    body = res.json()
-    total = body.get("total", 0)
-    raw_items: list[dict[str, Any]] = list(body.get("items") or [])
-    next_url = (body.get("next") or "").strip() or None
-    while next_url and len(raw_items) < cap:
-        page = requests.get(
-            next_url,
-            headers=_headers(active_token),
-            timeout=_REQUEST_TIMEOUT,
-        )
-        if page.status_code != 200:
-            break
-        chunk = page.json()
-        raw_items.extend(chunk.get("items") or [])
-        next_url = (chunk.get("next") or "").strip() or None
-
-    tracks = []
-    for row in raw_items[:cap]:
-        wrapped = row.get("track")
-        if wrapped is None and isinstance(row.get("item"), dict):
-            wrapped = row["item"]
-        t = _normalize_playlist_track_item(wrapped or {})
-        if t:
-            tracks.append(t)
-
-    return ({"tracks": tracks, "total": total, "returned": len(tracks)}, 200)
-
-
-def fetch_user_playlists_for_response(
-    oauth_access_token: str = "",
-    limit: int = 50,
-    oauth_refresh_token: str = "",
-    client_id: str = "",
-    client_secret: str = "",
-    on_token_refresh: Callable[[str, str | None], None] | None = None,
-) -> tuple[dict[str, Any], int]:
-    """
-    Fetch the current user's playlists via /v1/me/playlists.
-    Requires a user OAuth token with playlist-read-private scope.
-    """
-    token = (oauth_access_token or "").strip()
-    if not token:
-        return (
-            {
-                "error": "no_user_token",
-                "message": "Connect your Spotify account to view your playlists.",
-            },
-            401,
-        )
-
-    refresh_tok = (oauth_refresh_token or "").strip()
-    cid, csec = client_id.strip(), client_secret.strip()
-    used_oauth = bool((oauth_access_token or "").strip())
-
-    res = requests.get(
-        f"{SPOTIFY_API}/me/playlists",
-        headers=_headers(token),
-        params={"limit": min(limit, 50)},
-        timeout=_REQUEST_TIMEOUT,
-    )
-
-    if res.status_code in (401, 403) and refresh_tok and cid and csec and on_token_refresh and used_oauth:
-        new_access, new_refresh, _err = refresh_spotify_user_access_token(
-            cid, csec, refresh_tok
-        )
-        if new_access:
-            on_token_refresh(new_access, new_refresh)
-            token = new_access
-            res = requests.get(
-                f"{SPOTIFY_API}/me/playlists",
-                headers=_headers(token),
-                params={"limit": min(limit, 50)},
-                timeout=_REQUEST_TIMEOUT,
-            )
-
-    if res.status_code == 401:
-        return (
-            {
-                "error": "token_expired",
-                "message": "Spotify session expired. Disconnect and reconnect your Spotify account.",
-            },
-            401,
-        )
-
-    if res.status_code == 403:
-        return (
-            {
-                "error": "insufficient_scope",
-                "message": "Missing playlist-read-private permission. Disconnect and reconnect Spotify to grant access.",
-            },
-            403,
-        )
-
-    if res.status_code != 200:
-        try:
-            detail = res.json().get("error", {}).get("message", "") or res.text[:200]
-        except Exception:
-            detail = res.text[:200]
-        return (
-            {
-                "error": "spotify_api_error",
-                "message": "Could not load playlists from Spotify.",
-                "detail": detail,
-            },
-            502,
-        )
-
-    playlists = []
-    for p in res.json().get("items") or []:
-        if not p:
-            continue
-        images = p.get("images") or []
-        image_url = next((img.get("url") for img in images if img.get("url")), None)
-        tr_ref = p.get("tracks") or {}
-        tc = tr_ref.get("total")
-        playlists.append({
-            "id": p.get("id") or "",
-            "name": p.get("name") or "Untitled Playlist",
-            "description": p.get("description") or "",
-            "image": image_url,
-            "track_count": tc if tc is not None else None,
-            "owner": (p.get("owner") or {}).get("display_name") or "",
-            "url": (p.get("external_urls") or {}).get("spotify") or "",
-            "public": p.get("public", False),
-            "collaborative": p.get("collaborative", False),
-        })
-
-    return ({"playlists": playlists, "total": len(playlists)}, 200)
 
 
 def recommend_tracks_for_genre_response(
@@ -1321,7 +949,7 @@ def recommend_tracks_for_genre_response(
             503,
         )
 
-    market = _spotify_iso_market()
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
     headers = _headers(token)
 
     artist_names = list(_POPULAR_GENRE_ARTISTS.get(seed, []))
@@ -1478,7 +1106,7 @@ def recommend_similar_for_item_response(
             422,
         )
 
-    market = _spotify_iso_market()
+    market = first_non_empty("SPOTIFY_MARKET", "JAY_SPOTIFY_MARKET", default="US")
     headers = _headers(token)
     artist_names = list(_POPULAR_GENRE_ARTISTS.get(genre, []))
     for artist in _artist_search_items(token, f"genre:{genre}", limit=_GENRE_ARTIST_SEARCH_LIMIT):

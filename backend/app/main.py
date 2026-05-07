@@ -312,10 +312,12 @@ def create_app() -> Flask:
         app.logger.error("Database connection error: %s", error)
         return jsonify(ok=False, errors=["Database is temporarily unavailable. Please try again in a moment."]), 503
 
+    @app.errorhandler(HTTPException)
+    def handle_http_error(error):
+        return jsonify(ok=False, errors=[error.description]), error.code
+
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
-        if isinstance(error, HTTPException):
-            return jsonify(ok=False, errors=[error.description]), error.code
         app.logger.exception("Unhandled exception: %s", error)
         return jsonify(ok=False, errors=["An unexpected error occurred. Please try again."]), 500
 

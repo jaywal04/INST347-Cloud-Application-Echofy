@@ -100,10 +100,22 @@ def _sqlite_default_sql(col: Column) -> str | None:
     name = col.name.lower()
     if name in ("accepted_terms", "attempts"):
         return "0"
+    if name == "read":
+        return "0"
     if name in ("profile_public", "show_listening_history", "show_reviews", "show_bio", "show_genre"):
         return "1"
     if name == "created_at":
         return "CURRENT_TIMESTAMP"
+    if getattr(col, "default", None) is not None and getattr(col.default, "arg", None) is not None:
+        arg = col.default.arg
+        if callable(arg):
+            return None
+        if isinstance(arg, bool):
+            return "1" if arg else "0"
+        if isinstance(arg, int):
+            return str(arg)
+        if isinstance(arg, str):
+            return "'" + arg.replace("'", "''") + "'"
     return None
 
 

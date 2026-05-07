@@ -17,6 +17,7 @@ Priority:
 ## Startup / schema
 
 - `init_db(app)` registers SQLAlchemy, `db.create_all()`, then `schema_sync.ensure_model_table_columns` to add missing columns on existing tables for **SQLite** and **Microsoft SQL Server / Azure SQL**.
+- SQLite note: when adding a **NOT NULL** column to an existing table, `schema_sync` must provide a SQL default (for example `read` defaults to `0` for `direct_messages`) because SQLite rejects `ALTER TABLE ... ADD ... NOT NULL` without a non-NULL default.
 - If DB is unreachable at startup, warning is logged; routes handle `OperationalError` / `DBAPIError` with 503.
 
 ## Backward-compatible schema changes (deployed DBs)

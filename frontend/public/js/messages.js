@@ -28,6 +28,9 @@
   var selectedFriendId = params.get('friend') || '';
   var threads = [];
   var savedItems = [];
+  var POLL_INTERVAL_MS = 2500;
+  var pollTimer = null;
+  var lastConversationSignature = '';
 
   if (!threadListEl || !messageListEl || !formEl) return;
 
@@ -149,6 +152,12 @@
     messageListEl.scrollTop = messageListEl.scrollHeight;
   }
 
+  function conversationSignature(messages) {
+    if (!Array.isArray(messages) || !messages.length) return 'empty';
+    var last = messages[messages.length - 1] || {};
+    return String(messages.length) + ':' + String(last.id || '') + ':' + String(last.created_at || '');
+  }
+
   function setSelection(friend) {
     if (!friend) {
       selectedFriendId = '';
@@ -174,13 +183,66 @@
           window.location.href = route('login');
           return null;
         }
-        return res.json();
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
       })
-      .then(function (data) {
-        if (!data || !data.ok) return null;
-        threads = data.threads || [];
+      .then(function (result) {
+        if (!result) return null;
+        if (result.ok && result.data && result.data.ok) {
+          threads = result.data.threads || [];
+          renderThreads();
+          return { source: 'threads' };
+        }
+        return loadThreadsFallbackFriends(result.status);
+      })
+      .catch(function () {
+        return loadThreadsFallbackFriends(0);
+      });
+  }
+
+  function mapFriendToThread(friend) {
+    return {
+      friend: {
+        id: friend.id,
+        username: friend.username || 'Unknown',
+        profile_image_url: friend.profile_image_url || ''
+      },
+      latest_at: null,
+      latest_message: null,
+      latest_shared_item: null,
+      unread_count: 0
+    };
+  }
+
+  function loadThreadsFallbackFriends(failedStatus) {
+    return fetch(API_BASE + '/api/friends', fetchOpts)
+      .then(function (res) {
+        if (res.status === 401) {
+          window.location.href = route('login');
+          return null;
+        }
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (fallbackResult) {
+        if (!fallbackResult) return null;
+        if (!fallbackResult.ok || !fallbackResult.data || !fallbackResult.data.ok) {
+          setStatus('Could not load your friends for messaging right now.', true);
+          threads = [];
+          renderThreads();
+          return null;
+        }
+        threads = (fallbackResult.data.friends || []).map(mapFriendToThread);
+        setStatus(
+          failedStatus
+            ? 'Loaded friends list. Recent message previews are temporarily unavailable.'
+            : 'Loaded friends list from fallback source.',
+          false
+        );
         renderThreads();
-        return data;
+        return { source: 'friends_fallback' };
       });
   }
 
@@ -188,11 +250,13 @@
     return fetch(API_BASE + '/api/reviews/saved', fetchOpts)
       .then(function (res) {
         if (res.status === 401) return null;
-        return res.json();
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
       })
-      .then(function (data) {
-        if (!data || !data.ok) return null;
-        savedItems = (data.items || []).map(function (entry) {
+      .then(function (result) {
+        if (!result || !result.ok || !result.data || !result.data.ok) return null;
+        savedItems = (result.data.items || []).map(function (entry) {
           if (!entry || !entry.item) return null;
           return {
             item_key: entry.item_key || '',
@@ -213,6 +277,14 @@
           option.textContent = item.name + (item.artists.length ? ' — ' + item.artists.join(', ') : '');
           shareSelectEl.appendChild(option);
         });
+      })
+      .catch(function () {
+        // Saved song sharing is optional; keep Messages usable on fetch failures.
+        savedItems = [];
+        if (shareSelectEl) {
+          shareSelectEl.innerHTML = '<option value="">No song selected</option>';
+        }
+        return null;
       });
   }
 
@@ -250,9 +322,11 @@
       .catch(function () {});
   }
 
-  function openConversation(friendId) {
+  function openConversation(friendId, opts) {
     if (!friendId) return;
-    setStatus('', false);
+    opts = opts || {};
+    var silent = !!opts.silent;
+    if (!silent) setStatus('', false);
     fetch(API_BASE + '/api/messages/conversations/' + encodeURIComponent(friendId), fetchOpts)
       .then(function (res) {
         if (res.status === 401) {
@@ -267,18 +341,45 @@
         if (!result) return;
         if (!result.ok) {
           setSelection(null);
-          setStatus((result.data.errors || ['Could not load this conversation.']).join(' '), true);
+          if (!silent) {
+            setStatus((result.data.errors || ['Could not load this conversation.']).join(' '), true);
+          }
           return;
         }
         setSelection(result.data.friend);
-        renderMessages(result.data.messages || []);
-        if (textEl) textEl.focus();
+        var nextMessages = result.data.messages || [];
+        var sig = conversationSignature(nextMessages);
+        if (sig !== lastConversationSignature) {
+          renderMessages(nextMessages);
+          lastConversationSignature = sig;
+        }
+        if (!silent && textEl) textEl.focus();
         loadThreads();
         refreshNavBadge();
       })
       .catch(function () {
-        setStatus('Network error while loading this conversation.', true);
+        if (!silent) {
+          setStatus('Network error while loading this conversation.', true);
+        }
       });
+  }
+
+  function startLiveUpdates() {
+    stopLiveUpdates();
+    pollTimer = window.setInterval(function () {
+      if (document.hidden) return;
+      loadThreads();
+      refreshNavBadge();
+      if (selectedFriendId) {
+        openConversation(selectedFriendId, { silent: true });
+      }
+    }, POLL_INTERVAL_MS);
+  }
+
+  function stopLiveUpdates() {
+    if (!pollTimer) return;
+    window.clearInterval(pollTimer);
+    pollTimer = null;
   }
 
   threadListEl.addEventListener('click', function (event) {
@@ -289,6 +390,14 @@
 
   if (shareSelectEl) {
     shareSelectEl.addEventListener('change', updateSharePreview);
+  }
+
+  if (textEl) {
+    textEl.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.shiftKey) return;
+      event.preventDefault();
+      formEl.requestSubmit();
+    });
   }
 
   formEl.addEventListener('submit', function (event) {
@@ -367,13 +476,20 @@
     })
     .catch(function () {});
 
-  Promise.all([loadThreads(), loadSavedItems()]).then(function () {
-    if (selectedFriendId) {
-      openConversation(selectedFriendId);
-      return;
-    }
-    if (threads.length) {
-      openConversation(threads[0].friend.id);
-    }
-  });
+  Promise.all([loadThreads(), loadSavedItems()])
+    .then(function () {
+      if (selectedFriendId) {
+        openConversation(selectedFriendId);
+        return;
+      }
+      if (threads.length) {
+        openConversation(threads[0].friend.id);
+      }
+    })
+    .catch(function () {
+      setStatus('Could not finish loading Messages. Please refresh and try again.', true);
+    });
+
+  startLiveUpdates();
+  window.addEventListener('beforeunload', stopLiveUpdates);
 })();

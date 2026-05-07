@@ -116,10 +116,7 @@ def init_db(app):
             from app.schema_sync import ensure_model_table_columns
             ensure_model_table_columns(db.engine)
         except Exception as exc:
-            # Database temporarily unavailable (e.g. Azure SQL auto-pause, cold start).
-            # Log and continue — the app will serve requests and DB errors are handled
-            # per-route via the OperationalError/DBAPIError error handlers.
             import logging
             logging.getLogger(__name__).warning(
-                "DB schema sync skipped on startup (will retry on first request): %s", exc
+                "DB schema sync skipped on startup (DB unavailable, will sync on first request): %s", exc
             )

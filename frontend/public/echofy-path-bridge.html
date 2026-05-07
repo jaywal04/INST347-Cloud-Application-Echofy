@@ -8,7 +8,7 @@
       var path = location.pathname;
       var search = location.search || '';
       var m = path.match(
-        /^\/([^/]+)\/(discovery|dashboard|discover|review|posts|friends|profile|notifications|user)(?:\/|$)/
+        /^\/([^/]+)\/(discovery|dashboard|discover|review|posts|friends|profile|notifications|user|messages|echo)(?:\/|$)/
       );
       if (!m) {
         window.location.replace('/');
@@ -24,6 +24,8 @@
         profile: 'profile',
         notifications: 'notifications',
         user: 'user',
+        messages: 'messages',
+        echo: 'echo',
       };
       var file = map[m[2]];
       if (!file) {

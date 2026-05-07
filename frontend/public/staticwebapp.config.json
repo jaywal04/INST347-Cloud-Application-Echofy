@@ -8,7 +8,9 @@
     { "route": "/friends*", "rewrite": "/friends.html" },
     { "route": "/profile*", "rewrite": "/profile.html" },
     { "route": "/notifications*", "rewrite": "/notifications.html" },
-    { "route": "/user*", "rewrite": "/user.html" }
+    { "route": "/user*", "rewrite": "/user.html" },
+    { "route": "/messages*", "rewrite": "/messages.html" },
+    { "route": "/echo*", "rewrite": "/echo.html" }
   ],
   "navigationFallback": {
     "rewrite": "/echofy-path-bridge.html",

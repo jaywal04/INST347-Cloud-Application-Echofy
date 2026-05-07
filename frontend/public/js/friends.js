@@ -2,7 +2,15 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
-  var route = window.ECHOFY_ROUTE || function (value) { return value; };
+  var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  function route(path) {
+    var raw = String(path || '').trim();
+    if (!raw || raw === '#') return raw;
+    if (/^(https?:)?\/\//.test(raw)) return raw;
+    if (!isLocal) return raw;
+    if (raw.slice(-5) === '.html') return raw;
+    return raw + '.html';
+  }
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
 
   var myUserId = null;
@@ -103,10 +111,7 @@
     li.className = 'friends-card';
     var link = document.createElement('a');
     link.className = 'friends-card-link';
-    link.href =
-      (typeof window.echofyUserPath === 'function'
-        ? window.echofyUserPath('user')
-        : '/user') + '?id=' + f.id;
+    link.href = route('/user') + '?id=' + f.id;
     if (f.profile_image_url) {
       var img = document.createElement('img');
       img.className = 'friends-card-img';
@@ -144,7 +149,7 @@
       li.className = 'friends-card';
       var link = document.createElement('a');
       link.className = 'friends-card-link';
-      link.href = route('user') + '?id=' + f.id;
+      link.href = route('/user') + '?id=' + f.id;
       if (f.profile_image_url) {
         var img = document.createElement('img');
         img.className = 'friends-card-img';
@@ -166,12 +171,12 @@
 
       var profileBtn = document.createElement('a');
       profileBtn.className = 'btn-ghost btn-sm';
-      profileBtn.href = route('user') + '?id=' + f.id;
+      profileBtn.href = route('/user') + '?id=' + f.id;
       profileBtn.textContent = 'View profile';
 
       var messageBtn = document.createElement('a');
       messageBtn.className = 'btn-primary btn-sm';
-      messageBtn.href = route('messages') + '?friend=' + f.id;
+      messageBtn.href = route('/messages') + '?friend=' + f.id;
       messageBtn.textContent = 'Direct message';
 
       li.appendChild(link);

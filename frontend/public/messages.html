@@ -4,13 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Messages — Echofy</title>
+  <base href="/" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="css/styles.css"/>
 </head>
 <body>
 
   <div id="navbar"></div>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+  <script src="js/apiBase.js"></script>
+  <script src="js/pathContext.js"></script>
   <script src="js/navbar.js"></script>
+  <script src="js/bugReport.js"></script>
+  <script src="js/chat.js" defer></script>
 
   <div class="profile-page messages-page">
     <div class="profile-header">
@@ -24,11 +30,9 @@
       <aside class="messages-sidebar">
         <div class="messages-panel-header">
           <h2 class="friends-section-title">Friends</h2>
-          <a class="section-link" href="friends">Back to friends →</a>
         </div>
-        <p class="friends-section-desc">Only accepted friends can appear here or receive messages.</p>
         <ul id="message-thread-list" class="messages-thread-list"></ul>
-        <p id="message-thread-empty" class="friends-hint">Accept a friend request to start messaging.</p>
+        <p id="message-thread-empty" class="friends-hint" hidden>No accepted friends yet. Add friends to start messaging.</p>
       </aside>
 
       <section class="messages-conversation">
@@ -72,7 +76,6 @@
     </div>
   </footer>
 
-  <script src="js/config.js"></script>
   <script src="js/messages.js" defer></script>
 </body>
 </html>

@@ -17,6 +17,7 @@
     if (raw === '/') return isLocal ? '/index.html' : '/';
     if (!isLocal) return raw;
     if (raw.slice(-5) === '.html') return raw;
+    if (raw[0] === '/') return raw + '.html';
     if (raw.indexOf('/') !== -1) return raw;
     return raw + '.html';
   };
@@ -80,8 +81,8 @@
       { href: base + '/review', text: 'Reviews', active: activeSeg === 'review' },
       { href: base + '/posts', text: 'My posts', active: activeSeg === 'posts' },
       { href: base + '/friends', text: 'Friends', active: activeSeg === 'friends' },
-      { href: route('messages'), text: 'Messages', active: activeSeg === 'messages' },
-      { href: route('echo'), text: 'Your Echo', active: activeSeg === 'echo' },
+      { href: isLocal ? route('/messages') : base + '/messages', text: 'Messages', active: activeSeg === 'messages' },
+      { href: isLocal ? route('/echo') : base + '/echo', text: 'Your Echo', active: activeSeg === 'echo' },
     ]);
   }
 
@@ -192,6 +193,23 @@
       }
 
       reveal();
+
+      fetch(apiBase() + '/api/messages/unread-count', { credentials: 'include' })
+        .then(function (res) { return res.json(); })
+        .then(function (d) {
+          if (!d.ok || !d.count) return;
+          var links = ul.querySelectorAll('a');
+          links.forEach(function (a) {
+            if (a.textContent.trim() === 'Messages') {
+              var badge = document.createElement('span');
+              badge.id = 'nav-messages-badge';
+              badge.className = 'nav-msg-badge';
+              badge.textContent = d.count > 99 ? '99+' : String(d.count);
+              a.appendChild(badge);
+            }
+          });
+        })
+        .catch(function () {});
 
       fetch(apiBase() + '/api/notifications/count', { credentials: 'include' })
         .then(function (res) {

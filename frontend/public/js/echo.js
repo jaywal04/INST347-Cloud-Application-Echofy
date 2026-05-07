@@ -1,8 +1,15 @@
 (function () {
   'use strict';
 
-  var API_BASE = window.ECHOFY_API_BASE || '';
-  var route = window.ECHOFY_ROUTE || function (value) { return value; };
+  var API_BASE = typeof window.echofyApiBaseUrl === 'function'
+    ? window.echofyApiBaseUrl()
+    : String(window.ECHOFY_API_BASE || '').trim().replace(/\/+$/, '');
+  var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  function route(path) {
+    var raw = String(path || '').trim();
+    if (!isLocal || !raw || raw === '#' || /^https?:\/\//.test(raw)) return raw;
+    return raw.slice(-5) === '.html' ? raw : raw + '.html';
+  }
   var reviewsEl = document.getElementById('echo-reviews');
   var savedEl = document.getElementById('echo-saved');
   var reviewStatusEl = document.createElement('p');
@@ -218,6 +225,14 @@
       if (!auth.ok || !auth.data.authenticated) {
         window.location.href = route('login');
         return;
+      }
+
+      var username = auth.data.user && auth.data.user.username;
+      if (username) {
+        var target = '/' + encodeURIComponent(username) + '/echo';
+        if (window.location.pathname !== target) {
+          history.replaceState(null, '', target + window.location.search);
+        }
       }
 
       renderReviews(reviewRes.ok ? (reviewRes.data.reviews || []) : []);

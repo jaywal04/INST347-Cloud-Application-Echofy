@@ -1,8 +1,15 @@
 (function () {
   'use strict';
 
-  var API_BASE = window.ECHOFY_API_BASE || '';
-  var route = window.ECHOFY_ROUTE || function (value) { return value; };
+  var API_BASE = typeof window.echofyApiBaseUrl === 'function'
+    ? window.echofyApiBaseUrl()
+    : String(window.ECHOFY_API_BASE || '').trim().replace(/\/+$/, '');
+  var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  function route(path) {
+    var raw = String(path || '').trim();
+    if (!isLocal || !raw || raw === '#' || /^https?:\/\//.test(raw)) return raw;
+    return raw.slice(-5) === '.html' ? raw : raw + '.html';
+  }
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
   var params = new URLSearchParams(window.location.search);
 
@@ -72,18 +79,31 @@
 
     threads.forEach(function (thread) {
       var friend = thread.friend;
+      var isActive = String(friend.id) === String(selectedFriendId);
+      var initials = (friend.username || '?').substring(0, 2).toUpperCase();
+      var hasMessages = !!thread.latest_at;
+
+      var avatarHtml = friend.profile_image_url
+        ? '<img class="messages-thread-avatar-img" src="' + escapeHtml(friend.profile_image_url) + '" alt=""/>'
+        : '<div class="messages-thread-avatar-initials">' + escapeHtml(initials) + '</div>';
+
       var li = document.createElement('li');
       var button = document.createElement('button');
       button.type = 'button';
-      button.className = 'messages-thread-button' + (String(friend.id) === String(selectedFriendId) ? ' is-active' : '');
+      button.className = 'messages-thread-button' + (isActive ? ' is-active' : '');
       button.setAttribute('data-friend-id', String(friend.id));
       button.innerHTML =
-        '<div class="messages-thread-top">' +
-          '<span class="messages-thread-name">' + escapeHtml(friend.username) + '</span>' +
-          (thread.unread_count ? '<span class="messages-thread-badge">' + escapeHtml(thread.unread_count) + '</span>' : '') +
-        '</div>' +
-        '<div class="messages-thread-preview">' + escapeHtml(subtitleForThread(thread)) + '</div>' +
-        (thread.latest_at ? '<div class="messages-thread-time">' + escapeHtml(formatTime(thread.latest_at)) + '</div>' : '');
+        '<div class="messages-thread-avatar">' + avatarHtml + '</div>' +
+        '<div class="messages-thread-info">' +
+          '<div class="messages-thread-top">' +
+            '<span class="messages-thread-name">' + escapeHtml(friend.username) + '</span>' +
+            (thread.unread_count ? '<span class="messages-thread-badge">' + thread.unread_count + '</span>' : '') +
+            (hasMessages ? '<span class="messages-thread-time">' + escapeHtml(formatTime(thread.latest_at)) + '</span>' : '') +
+          '</div>' +
+          '<div class="messages-thread-preview' + (!hasMessages ? ' messages-thread-new' : '') + '">' +
+            escapeHtml(hasMessages ? subtitleForThread(thread) : 'Start a conversation') +
+          '</div>' +
+        '</div>';
       li.appendChild(button);
       threadListEl.appendChild(li);
     });
@@ -213,6 +233,23 @@
       '<div class="message-share-preview-subtitle">' + escapeHtml((item.artists || []).join(', ') + (item.album ? ' · ' + item.album : '')) + '</div>';
   }
 
+  function refreshNavBadge() {
+    fetch(API_BASE + '/api/messages/unread-count', { credentials: 'include' })
+      .then(function (res) { return res.json(); })
+      .then(function (d) {
+        var badge = document.getElementById('nav-messages-badge');
+        if (!d || !d.ok) return;
+        if (d.count > 0) {
+          if (badge) {
+            badge.textContent = d.count > 99 ? '99+' : String(d.count);
+          }
+        } else if (badge) {
+          badge.remove();
+        }
+      })
+      .catch(function () {});
+  }
+
   function openConversation(friendId) {
     if (!friendId) return;
     setStatus('', false);
@@ -237,6 +274,7 @@
         renderMessages(result.data.messages || []);
         if (textEl) textEl.focus();
         loadThreads();
+        refreshNavBadge();
       })
       .catch(function () {
         setStatus('Network error while loading this conversation.', true);
@@ -316,6 +354,18 @@
         sendButtonEl.textContent = 'Send message';
       });
   });
+
+  fetch(API_BASE + '/api/auth/me', { credentials: 'include' })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.authenticated && data.user && data.user.username) {
+        var target = '/' + encodeURIComponent(data.user.username) + '/messages';
+        if (window.location.pathname !== target) {
+          history.replaceState(null, '', target + window.location.search);
+        }
+      }
+    })
+    .catch(function () {});
 
   Promise.all([loadThreads(), loadSavedItems()]).then(function () {
     if (selectedFriendId) {

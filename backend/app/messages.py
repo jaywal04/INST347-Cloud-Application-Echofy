@@ -44,6 +44,16 @@ def _conversation_query(me_id: int, friend_id: int):
     )
 
 
+@messages_bp.get("/api/messages/unread-count")
+@login_required
+def unread_count():
+    count = DirectMessage.query.filter_by(
+        recipient_id=current_user.id,
+        read_at=None,
+    ).count()
+    return jsonify(ok=True, count=count)
+
+
 @messages_bp.get("/api/messages/threads")
 @login_required
 def list_threads():

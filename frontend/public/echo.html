@@ -4,13 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Your Echo — Echofy</title>
+  <base href="/" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="css/styles.css"/>
 </head>
 <body>
 
   <div id="navbar"></div>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+  <script src="js/apiBase.js"></script>
+  <script src="js/pathContext.js"></script>
   <script src="js/navbar.js"></script>
+  <script src="js/bugReport.js"></script>
+  <script src="js/chat.js" defer></script>
 
   <main class="echo-page">
     <header class="echo-hero">
@@ -46,8 +52,6 @@
       <a href="#">GitHub</a>
     </div>
   </footer>
-
-  <script src="js/config.js"></script>
 
   <script src="js/echo.js" defer></script>
 </body>

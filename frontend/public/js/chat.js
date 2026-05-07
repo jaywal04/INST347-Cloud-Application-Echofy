@@ -130,9 +130,9 @@
     ]).then(function (res) {
       isConfigured    = !!(res[0] && res[0].configured);
       isAuthenticated = !!(res[1] && res[1].authenticated);
-      if (res[1] && res[1].authenticated) {
-        userPhotoUrl = res[1].photo_url || null;
-        userInitials = (res[1].username || '?').substring(0, 2).toUpperCase();
+      if (res[1] && res[1].authenticated && res[1].user) {
+        userPhotoUrl = res[1].user.profile_image_url || null;
+        userInitials = (res[1].user.username || '?').substring(0, 2).toUpperCase();
       }
       statusChecked   = true;
       applyStatus();

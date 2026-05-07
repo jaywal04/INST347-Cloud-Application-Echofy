@@ -54,7 +54,7 @@
 
   if (window.location.search.indexOf('spotify=connected') !== -1 && statusEl) {
     statusEl.textContent =
-      'Spotify connected. Use “Show top Spotify music” for your top tracks.';
+      'Spotify connected. Use “Your Top Tracks” to load your Spotify-only top tracks.';
   }
 
   function loadShortlist() {

@@ -11,7 +11,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
 from app.database import db
-from app.models import FriendRequest, Notification, ReviewLike, ReviewReaction, SongReview, User, UserFollow, utcnow_naive
+from app.models import FriendRequest, Notification, ReviewLike, ReviewReaction, SavedSpotifyItem, SongReview, User, UserFollow, utcnow_naive
 
 
 reviews_bp = Blueprint("reviews", __name__, url_prefix="/api/reviews")
@@ -553,6 +553,82 @@ def delete_review(review_id: int):
     return jsonify(ok=True)
 
 
+@reviews_bp.get("/saved")
+@login_required
+def list_saved_tracks():
+    saved_items = (
+        SavedSpotifyItem.query.filter_by(user_id=current_user.id, item_type="track")
+        .order_by(SavedSpotifyItem.updated_at.desc())
+        .limit(100)
+        .all()
+    )
+    return jsonify(ok=True, items=[saved.to_dict() for saved in saved_items])
+
+
+@reviews_bp.post("/saved")
+@login_required
+def save_track():
+    data = request.get_json(silent=True) or {}
+    item = data.get("item") or {}
+    if not isinstance(item, dict):
+        return jsonify(ok=False, errors=["Song data is required."]), 400
+
+    item_type = _clean_string(item.get("type"), 20, "track") or "track"
+    if item_type != "track":
+        return jsonify(ok=False, errors=["Only tracks can be saved to Your Echo."]), 400
+
+    name = _clean_string(item.get("name"), 255)
+    if not name:
+        return jsonify(ok=False, errors=["Song name is required."]), 400
+
+    item_key = _clean_string(data.get("item_key"), 1024) or _item_key(item)
+    item_hash = _hash_key(item_key)
+    artists = item.get("artists") or []
+    if not isinstance(artists, list):
+        artists = [artists]
+
+    saved = SavedSpotifyItem.query.filter_by(
+        user_id=current_user.id,
+        item_hash=item_hash,
+    ).first()
+    if saved is None:
+        saved = SavedSpotifyItem(user_id=current_user.id, item_hash=item_hash, item_key=item_key)
+        db.session.add(saved)
+
+    saved.item_key = item_key
+    saved.item_type = item_type
+    saved.name = name
+    saved.artists = _clean_string(", ".join(_clean_string(a, 120) for a in artists), 500)
+    saved.album = _clean_string(item.get("album"), 255)
+    saved.image_url = _clean_string(item.get("image"), 2048)
+    saved.spotify_url = _clean_string(item.get("url"), 2048)
+    saved.updated_at = utcnow_naive()
+
+    db.session.commit()
+    return jsonify(ok=True, item=saved.to_dict())
+
+
+@reviews_bp.delete("/saved")
+@login_required
+def delete_saved_track():
+    data = request.get_json(silent=True) or {}
+    item_key = _clean_string(data.get("item_key"), 1024)
+    if not item_key:
+        return jsonify(ok=False, errors=["Item key is required."]), 400
+
+    item_hash = _hash_key(item_key)
+    saved = SavedSpotifyItem.query.filter_by(
+        user_id=current_user.id,
+        item_hash=item_hash,
+    ).first()
+    if saved is None:
+        return jsonify(ok=True)
+
+    db.session.delete(saved)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @reviews_bp.post("")
 @login_required
 def upsert_review():
@@ -606,3 +682,29 @@ def upsert_review():
         _notify_followers_and_friends(current_user.id, review.id)
 
     return jsonify(ok=True, review=review.to_dict())
+
+
+@reviews_bp.delete("")
+@login_required
+def delete_review():
+    data = request.get_json(silent=True) or {}
+    item_key = _clean_string(data.get("item_key"), 1024)
+    if not item_key:
+        item = data.get("item") or {}
+        if isinstance(item, dict):
+            item_key = _item_key(item)
+
+    if not item_key:
+        return jsonify(ok=False, errors=["Item key is required."]), 400
+
+    item_hash = _hash_key(item_key)
+    review = SongReview.query.filter_by(
+        user_id=current_user.id,
+        item_hash=item_hash,
+    ).first()
+    if review is None:
+        return jsonify(ok=True)
+
+    db.session.delete(review)
+    db.session.commit()
+    return jsonify(ok=True)

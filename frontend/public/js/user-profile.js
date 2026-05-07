@@ -2,6 +2,7 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
+  var route = window.ECHOFY_ROUTE || function (value) { return value; };
   var fetchOpts = { credentials: 'include' };
   var MSG_NET =
     'Something went wrong. The team has been notified. Please try again shortly.';
@@ -15,6 +16,7 @@
   var avatarEl = document.getElementById('user-avatar');
   var detailsEl = document.getElementById('user-details');
   var errorEl = document.getElementById('user-error');
+  var actionsEl = document.getElementById('user-actions');
 
   if (!userId) {
     usernameEl.textContent = 'User not found';
@@ -61,6 +63,20 @@
       document.getElementById('user-follower-count').textContent = p.follower_count || 0;
       document.getElementById('user-friend-count').textContent = p.friend_count || 0;
       document.getElementById('user-stats').hidden = false;
+
+      if (actionsEl) {
+        actionsEl.innerHTML = '';
+        if (p.can_message) {
+          var messageLink = document.createElement('a');
+          messageLink.href = route('messages') + '?friend=' + encodeURIComponent(String(p.id));
+          messageLink.className = 'btn-primary';
+          messageLink.textContent = 'Direct message';
+          actionsEl.appendChild(messageLink);
+          actionsEl.hidden = false;
+        } else {
+          actionsEl.hidden = true;
+        }
+      }
 
       // Bio
       if (p.bio) {

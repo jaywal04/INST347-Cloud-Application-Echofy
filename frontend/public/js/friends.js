@@ -2,6 +2,7 @@
   'use strict';
 
   var API_BASE = window.ECHOFY_API_BASE || '';
+  var route = window.ECHOFY_ROUTE || function (value) { return value; };
   var fetchOpts = { credentials: 'include', headers: { 'Content-Type': 'application/json' } };
 
   var myUserId = null;
@@ -139,33 +140,45 @@
     }
     empty.hidden = true;
     friends.forEach(function (f) {
-      var removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn-ghost btn-sm';
-      removeBtn.setAttribute('data-remove-friend', f.id);
-      removeBtn.textContent = 'Remove';
-      ul.appendChild(buildUserCard(f, removeBtn));
-    });
-  }
+      var li = document.createElement('li');
+      li.className = 'friends-card';
+      var link = document.createElement('a');
+      link.className = 'friends-card-link';
+      link.href = route('user') + '?id=' + f.id;
+      if (f.profile_image_url) {
+        var img = document.createElement('img');
+        img.className = 'friends-card-img';
+        img.alt = '';
+        img.src = f.profile_image_url;
+        link.appendChild(img);
+      } else {
+        var initials = document.createElement('div');
+        initials.className = 'friends-card-initials';
+        initials.textContent = f.username.substring(0, 2).toUpperCase();
+        link.appendChild(initials);
+      }
+      var name = document.createElement('span');
+      name.className = 'friends-card-name';
+      name.textContent = f.username;
+      link.appendChild(name);
+      var actions = document.createElement('div');
+      actions.className = 'friends-card-actions';
 
-  function renderFollowing(data) {
-    var ul = document.getElementById('following-list');
-    var empty = document.getElementById('following-list-empty');
-    if (!data || !data.ok || !ul) return;
-    var following = data.following || [];
-    ul.innerHTML = '';
-    if (following.length === 0) {
-      empty.hidden = false;
-      return;
-    }
-    empty.hidden = true;
-    following.forEach(function (f) {
-      var unfollowBtn = document.createElement('button');
-      unfollowBtn.type = 'button';
-      unfollowBtn.className = 'btn-ghost btn-sm';
-      unfollowBtn.setAttribute('data-unfollow', f.id);
-      unfollowBtn.textContent = 'Unfollow';
-      ul.appendChild(buildUserCard(f, unfollowBtn));
+      var profileBtn = document.createElement('a');
+      profileBtn.className = 'btn-ghost btn-sm';
+      profileBtn.href = route('user') + '?id=' + f.id;
+      profileBtn.textContent = 'View profile';
+
+      var messageBtn = document.createElement('a');
+      messageBtn.className = 'btn-primary btn-sm';
+      messageBtn.href = route('messages') + '?friend=' + f.id;
+      messageBtn.textContent = 'Direct message';
+
+      li.appendChild(link);
+      actions.appendChild(profileBtn);
+      actions.appendChild(messageBtn);
+      li.appendChild(actions);
+      ul.appendChild(li);
     });
   }
 

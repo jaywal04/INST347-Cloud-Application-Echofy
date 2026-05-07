@@ -14,11 +14,13 @@ from sqlalchemy.schema import Column
 _log = logging.getLogger(__name__)
 
 from app.models import (
+    DirectMessage,
     FriendRequest,
     Notification,
     PendingVerification,
     ReviewLike,
     ReviewReaction,
+    SavedSpotifyItem,
     SongReview,
     User,
     UserFollow,
@@ -450,6 +452,8 @@ def ensure_model_table_columns(engine) -> None:
             ReviewReaction.__table__,
             UserFollow.__table__,
             Notification.__table__,
+            SavedSpotifyItem.__table__,
+            DirectMessage.__table__,
         )],
         ensure_review_likes_one_per_user,
         ensure_review_reactions_one_per_user_emoji,

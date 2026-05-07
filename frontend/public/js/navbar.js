@@ -9,11 +9,23 @@
           .replace(/\/+$/, '');
   }
 
+  var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  var route = window.ECHOFY_ROUTE || function (value) {
+    var raw = String(value || '').trim();
+    if (!raw || raw === '#') return raw;
+    if (/^(https?:)?\/\//.test(raw) || raw.indexOf('#') === 0) return raw;
+    if (raw === '/') return isLocal ? '/index.html' : '/';
+    if (!isLocal) return raw;
+    if (raw.slice(-5) === '.html') return raw;
+    if (raw.indexOf('/') !== -1) return raw;
+    return raw + '.html';
+  };
+
   var nav = document.createElement('nav');
 
   var logo = document.createElement('a');
   logo.className = 'logo';
-  logo.href = '/';
+  logo.href = route('/');
   logo.innerHTML = 'Echo<span>fy</span>';
 
   var ul = document.createElement('ul');
@@ -68,6 +80,8 @@
       { href: base + '/review', text: 'Reviews', active: activeSeg === 'review' },
       { href: base + '/posts', text: 'My posts', active: activeSeg === 'posts' },
       { href: base + '/friends', text: 'Friends', active: activeSeg === 'friends' },
+      { href: route('messages'), text: 'Messages', active: activeSeg === 'messages' },
+      { href: route('echo'), text: 'Your Echo', active: activeSeg === 'echo' },
     ]);
   }
 
@@ -77,7 +91,6 @@
     var activeDiscover =
       pathParts.length === 1 &&
       (p0 === 'discover' || p0 === 'discovery' || p0 === 'dashboard');
-    var activeFriends = pathParts.length === 1 && p0 === 'friends';
     var activeReview = pathParts.length === 1 && p0 === 'review';
     var activePosts = pathParts.length === 1 && p0 === 'posts';
     appendNavLinks([

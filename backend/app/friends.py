@@ -76,6 +76,7 @@ def public_profile(user_id: int):
         "profile_image_url": signed_profile_image_url(user.profile_image_url),
         "follower_count": follower_count,
         "friend_count": friend_count,
+        "can_message": _are_friends(current_user.id, user.id),
     }
 
     if user.show_bio:

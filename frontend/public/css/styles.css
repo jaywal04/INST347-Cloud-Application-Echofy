@@ -2466,9 +2466,42 @@ button.reviews-spotify-pick.spotify-track:hover {
   gap: 0.6rem;
 }
 
-.echofy-ai-msg { display: flex; }
+.echofy-ai-msg { display: flex; gap: 0.5rem; align-items: flex-start; }
 .echofy-ai-msg-user      { justify-content: flex-end; }
 .echofy-ai-msg-assistant { justify-content: flex-start; }
+
+.echofy-ai-avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.echofy-ai-avatar img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+
+.echofy-ai-avatar-assistant {
+  background: var(--navy-card);
+  border: 1px solid var(--navy-border);
+}
+
+.echofy-ai-avatar-user {
+  background: var(--accent);
+  color: #fff;
+}
 
 .echofy-ai-bubble {
   max-width: 82%;

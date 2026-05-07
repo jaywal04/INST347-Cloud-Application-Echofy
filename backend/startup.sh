@@ -21,13 +21,13 @@ if [ -d "$WWWROOT/app" ]; then
 elif [ -d "$WWWROOT/backend/app" ]; then
   APP_ROOT="$WWWROOT/backend"
 else
-  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ERROR: cannot find app/ under $WWWROOT" >> "$LOG_FILE"
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ) / $(TZ=America/New_York date +%H:%M:%S' EDT')] ERROR: cannot find app/ under $WWWROOT" >> "$LOG_FILE"
   exit 1
 fi
 
 PACKAGES_PATH="$APP_ROOT/.python_packages/lib/site-packages"
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] starting gunicorn on PORT=${PORT:-unset}, APP_ROOT=$APP_ROOT" >> "$LOG_FILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ) / $(TZ=America/New_York date +%H:%M:%S' EDT')] starting gunicorn on PORT=${PORT:-unset}, APP_ROOT=$APP_ROOT" >> "$LOG_FILE"
 
 export PYTHONPATH="$APP_ROOT:$PACKAGES_PATH"
 cd "$APP_ROOT"
